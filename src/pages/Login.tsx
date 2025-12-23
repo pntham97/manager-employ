@@ -29,6 +29,8 @@ const Login = () => {
       // const { accessToken, user } = res.accessToken;
       localStorage.setItem("token", res?.data.accessToken);
       localStorage.setItem("user", JSON.stringify(res?.data.user));
+      localStorage.setItem("employee", JSON.stringify(res?.data.employee));
+
       message.success("Đăng nhập thành công");
       navigate("/");
     }
