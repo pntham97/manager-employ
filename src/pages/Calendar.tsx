@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { shiftTypeSupplierApi } from "../api/shiftTypeSupplier.api";
+import { scheduleApi } from "../api/schedule.api";
 
 const Calendar = () => {
 
@@ -15,6 +16,8 @@ const Calendar = () => {
     const calendarGridRef = useRef<HTMLDivElement | null>(null);
     // Dữ liệu ca làm từ API
     const [shiftData, setShiftData] = useState<any | null>(null);
+    // Lịch đã đăng ký (schedule)
+    const [scheduleData, setScheduleData] = useState<any[]>([]);
 
     const currentMonth = currentDate.getMonth(); // 0-11
     const currentYear = currentDate.getFullYear();
@@ -62,6 +65,59 @@ const Calendar = () => {
         setSelectedShiftLabel("");
     };
 
+    const handleDetailShiftClick = async (e: React.MouseEvent, detailShift: any) => {
+        e.stopPropagation();
+
+        // Lấy ngày đã chọn
+        if (selectedDay !== null) {
+            // Tạo Date object với ngày và giờ phút giây mặc định về 0
+            const registrationDate = new Date(currentYear, currentMonth, selectedDay, 0, 0, 0);
+
+            // Format thành ISO string như "2024-01-15T00:00:00"
+            const year = registrationDate.getFullYear();
+            const month = String(registrationDate.getMonth() + 1).padStart(2, '0');
+            const day = String(registrationDate.getDate()).padStart(2, '0');
+            const hour = String(registrationDate.getHours()).padStart(2, '0');
+            const minute = String(registrationDate.getMinutes()).padStart(2, '0');
+            const second = String(registrationDate.getSeconds()).padStart(2, '0');
+
+            const formattedDate = `${year}-${month}-${day}T${hour}:${minute}:${second}`;
+            const employee = JSON.parse(localStorage.getItem("employee") ?? "{}");
+
+            try {
+                const response = await scheduleApi.create({
+                    supplierId: employee.supplierId,
+                    detailShiftTypeId: detailShift?.id ?? detailShift?.detailShiftTypeId,
+                    registrationDate: formattedDate
+                });
+                console.log("Tạo schedule thành công:", response.data);
+
+                // Lấy schedule mới tạo từ response (ưu tiên res.data.data)
+                const createdSchedule = response?.data?.data ?? response?.data ?? null;
+                if (createdSchedule) {
+                    setScheduleData((prev) => [...prev, createdSchedule]);
+                } else {
+                    // Fallback: tự dựng object tối thiểu để hiển thị tức thì
+                    setScheduleData((prev) => [
+                        ...prev,
+                        {
+                            detailShiftType: detailShift,
+                            registrationDate: formattedDate,
+                            supplierId: employee.supplierId,
+                        },
+                    ]);
+                }
+
+                // Đóng hộp thoại chi tiết ca sau khi đăng ký xong
+                setSelectedShiftDetails([]);
+                setSelectedShiftLabel("");
+                setShiftOptionsDay(null);
+            } catch (error: any) {
+                console.error("Lỗi khi tạo schedule:", error.response?.data || error.message);
+            }
+        }
+    };
+
     // Gọi API lấy dữ liệu ca làm theo tháng/năm hiện tại
     useEffect(() => {
         const month = currentMonth + 1; // API dùng tháng 1-12
@@ -96,6 +152,41 @@ const Calendar = () => {
                 });
         } catch (error) {
             console.error("Failed to parse employee from localStorage", error);
+        }
+    }, [currentMonth, currentYear]);
+
+    // Gọi API lấy schedule theo tháng/năm hiện tại
+    useEffect(() => {
+        const month = currentMonth + 1; // API dùng tháng 1-12
+        const year = currentYear;
+
+        const employeeStr = localStorage.getItem("employee");
+        if (!employeeStr) {
+            console.warn("Employee is not found in localStorage (schedule)");
+            return;
+        }
+
+        try {
+            const employee = JSON.parse(employeeStr);
+            const supplierId = employee?.supplierId;
+
+            if (!supplierId) {
+                console.warn("supplierId is missing in employee data (schedule)");
+                return;
+            }
+
+            scheduleApi
+                .getByMonthYear(month, year)
+                .then((res) => {
+                    const payload = Array.isArray(res.data) ? res.data : res.data?.data;
+                    setScheduleData(payload ?? []);
+                    console.log("Schedule data", payload);
+                })
+                .catch((error) => {
+                    console.error("Failed to load schedule data", error);
+                });
+        } catch (error) {
+            console.error("Failed to parse employee from localStorage (schedule)", error);
         }
     }, [currentMonth, currentYear]);
 
@@ -208,6 +299,9 @@ const Calendar = () => {
                 </div>
                 <p className="text-sm text-[#616f89] dark:text-[#9ca3af]">
                     Trạng thái dữ liệu ca làm: {shiftData ? "Đã tải" : "Chưa có"}
+                </p>
+                <p className="text-sm text-[#616f89] dark:text-[#9ca3af]">
+                    Lịch đã đăng ký: {scheduleData.length > 0 ? `${scheduleData.length} mục` : "Chưa có"}
                 </p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -373,6 +467,36 @@ const Calendar = () => {
                                         {cell.label}
                                     </span>
 
+                                    {/* Hiển thị các schedule đã đăng ký ứng với ngày này */}
+                                    {cell.isCurrentMonth && typeof cell.label === "number" && (
+                                        <div className="flex flex-col gap-1">
+                                            {scheduleData
+                                                .filter((s: any) => {
+                                                    const reg = toDateOnly(s?.registrationDate ?? s?.registration_date);
+                                                    if (!reg) return false;
+                                                    return (
+                                                        reg.getFullYear() === currentYear &&
+                                                        reg.getMonth() === currentMonth &&
+                                                        reg.getDate() === cell.label
+                                                    );
+                                                })
+                                                .map((s: any, idx: number) => {
+                                                    const st = s?.detailShiftType ?? s;
+                                                    const shiftName = st?.name ?? "Ca";
+                                                    const startTime = st?.startAt ?? st?.start_at ?? st?.start ?? "";
+                                                    const endTime = st?.endAt ?? st?.end_at ?? st?.end ?? "";
+                                                    return (
+                                                        <div
+                                                            key={s?.id ?? `sch-${cell.label}-${idx}`}
+                                                            className="text-[11px] px-2 py-1 rounded border border-green-500 text-green-700 bg-green-50 dark:border-green-700 dark:text-green-200 dark:bg-green-900/20"
+                                                        >
+                                                            {shiftName} {startTime && endTime ? `(${startTime} - ${endTime})` : ""}
+                                                        </div>
+                                                    );
+                                                })}
+                                        </div>
+                                    )}
+
                                     {selectedDay === cell.label && (
                                         <div className="flex flex-col gap-2 mt-1">
                                             {/* Ẩn nút khi đang hiển thị chi tiết ca */}
@@ -415,8 +539,37 @@ const Calendar = () => {
                                                                         st?.listDetailShiftType ??
                                                                         item?.listDetailShiftType ??
                                                                         [];
+                                                                    // Loại bỏ các ca chi tiết đã đăng ký cho ngày này
+                                                                    const existingDetailIds = scheduleData
+                                                                        .filter((s: any) => {
+                                                                            const reg = toDateOnly(s?.registrationDate ?? s?.registration_date);
+                                                                            if (!reg) return false;
+                                                                            return (
+                                                                                reg.getFullYear() === currentYear &&
+                                                                                reg.getMonth() === currentMonth &&
+                                                                                reg.getDate() === cell.label
+                                                                            );
+                                                                        })
+                                                                        .map(
+                                                                            (s: any) =>
+                                                                                s?.detailShiftType?.id ??
+                                                                                s?.detailShiftTypeId ??
+                                                                                s?.detailShiftTypeID
+                                                                        )
+                                                                        .filter(Boolean);
+
+                                                                    const filteredDetails = Array.isArray(details)
+                                                                        ? details.filter(
+                                                                            (d: any) =>
+                                                                                !existingDetailIds.includes(
+                                                                                    d?.id ??
+                                                                                    d?.detailShiftTypeId ??
+                                                                                    d?.detailShiftTypeID
+                                                                                )
+                                                                        )
+                                                                        : [];
                                                                     setSelectedShiftDetails(
-                                                                        Array.isArray(details) ? details : []
+                                                                        filteredDetails
                                                                     );
                                                                     setSelectedShiftLabel(st?.name ?? "Ca");
                                                                     // Ẩn danh sách shiftType sau khi chọn
@@ -442,6 +595,7 @@ const Calendar = () => {
                                                         {selectedShiftDetails.map((d: any, i: number) => (
                                                             <button
                                                                 key={d?.id ?? i}
+                                                                onClick={(e) => handleDetailShiftClick(e, d)}
                                                                 className="text-[12px] text-left px-2 py-1 rounded border border-blue-400 text-blue-700 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-200 dark:hover:bg-blue-900/30 transition"
                                                             >
                                                                 {d?.name ?? "Ca"}: {d?.startAt ?? d?.start_at ?? d?.start} -{" "}
@@ -454,7 +608,7 @@ const Calendar = () => {
 
                                             {selectedShiftDetails.length === 0 && selectedShiftLabel && (
                                                 <span className="text-[11px] text-gray-500">
-                                                    Không có chi tiết cho {selectedShiftLabel}
+                                                    Không còn ca trống cho {selectedShiftLabel} (đã đăng ký hết trong ngày)
                                                 </span>
                                             )}
                                         </div>
