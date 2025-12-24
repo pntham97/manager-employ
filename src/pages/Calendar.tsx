@@ -280,7 +280,7 @@ const Calendar = () => {
 
 
     return (
-        <div className="p-6 lg:p-10 max-w-[1280px] mx-auto w-full flex flex-col gap-8">
+        <div className="p-6 lg:p-10 px-8  mx-auto w-full flex flex-col gap-8">
 
             <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
                 <div className="flex flex-col gap-2">
@@ -445,19 +445,22 @@ const Calendar = () => {
                                     setSelectedShiftLabel("");
                                 }
                             }}
-                            className={`min-h-[140px] p-2 transition-colors relative bg-white dark:bg-[#1a2230] ${cell.isCurrentMonth
-                                ? "group hover:bg-blue-50/50 dark:hover:bg-[#252d3d] cursor-pointer"
-                                : "opacity-40"
-                                } ${cell.isToday
+                            className={`min-h-[181px] max-h-[181px] overflow-y-auto p-2 transition-colors relative bg-white dark:bg-[#1a2230]
+${cell.isCurrentMonth
+                                    ? "group hover:bg-blue-50/50 dark:hover:bg-[#252d3d] cursor-pointer"
+                                    : "opacity-40"
+                                }
+${cell.isToday
                                     ? "ring-2 ring-blue-500 ring-offset-2 ring-offset-[#f0f2f4] dark:ring-offset-[#1a2230]"
                                     : ""
-                                } ${cell.isCurrentMonth && selectedDay === cell.label
+                                }
+${cell.isCurrentMonth && selectedDay === cell.label
                                     ? "border-2 border-blue-500"
                                     : ""
                                 }`}
                         >
                             {cell.label !== "" && (
-                                <div className="flex flex-col gap-2">
+                                <div className="flex flex-col ">
                                     <span
                                         className={`text-sm font-bold ${cell.isToday
                                             ? "text-blue-600 dark:text-blue-300"
@@ -488,7 +491,7 @@ const Calendar = () => {
                                                     return (
                                                         <div
                                                             key={s?.id ?? `sch-${cell.label}-${idx}`}
-                                                            className="text-[11px] px-2 py-1 rounded border border-green-500 text-green-700 bg-green-50 dark:border-green-700 dark:text-green-200 dark:bg-green-900/20"
+                                                            className="text-[11px] px-2 py-1 mt-2 rounded border border-green-500 text-green-700 bg-green-50 dark:border-green-700 dark:text-green-200 dark:bg-green-900/20"
                                                         >
                                                             {shiftName} {startTime && endTime ? `(${startTime} - ${endTime})` : ""}
                                                         </div>
@@ -587,7 +590,7 @@ const Calendar = () => {
 
                                             {/* Chi tiết ca đã chọn (dạng nút bấm) */}
                                             {selectedShiftDetails.length > 0 && (
-                                                <div className="mt-2 flex flex-col gap-1 border border-blue-100 dark:border-blue-900/40 rounded p-2 bg-white dark:bg-[#111827]">
+                                                <div className=" flex flex-col gap-1 border border-blue-100 dark:border-blue-900/40 rounded p-2 bg-white dark:bg-[#111827]">
                                                     <span className="text-[12px] font-semibold text-blue-700 dark:text-blue-300">
                                                         Chi tiết {selectedShiftLabel}
                                                     </span>
