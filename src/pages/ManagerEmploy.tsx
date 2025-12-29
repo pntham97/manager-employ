@@ -19,7 +19,10 @@ const ManagerEmploy = () => {
                         <span className="material-icons-outlined text-lg mr-2">file_download</span>
                         Xuất Excel
                     </button>
-                    <button className="inline-flex items-center px-4 py-2 bg-[white] hover:bg-[white]-hover text-black rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[white] shadow-soft transition-colors">
+                    <button
+                        onClick={() => navigate("/ManagerEmploy/AddEmploys")}
+                        className="inline-flex items-center px-4 py-2 bg-[white] hover:bg-[white]-hover text-black rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[white] shadow-soft transition-colors"
+                    >
                         <span className="material-icons-outlined text-lg mr-2">add</span>
                         Thêm nhân viên mới
                     </button>
