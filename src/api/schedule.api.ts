@@ -48,5 +48,15 @@ export const scheduleApi = {
             params,
         });
     },
+
+    getAdminManagerSchedule(month: number, year: number, supplierId?: number): Promise<ApiResponse<any>> {
+        const params: { month: number; year: number; supplierId?: number } = { month, year };
+        if (supplierId !== undefined) {
+            params.supplierId = supplierId;
+        }
+        return axiosClient.get("/schedule/admin-manager", {
+            params,
+        });
+    },
 };
 

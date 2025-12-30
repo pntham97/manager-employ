@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from "react";
-import { Home, Archive, ChevronRight, ChevronDown, Settings, Users, Truck, ScrollTextIcon } from "lucide-react";
+import { Home, Archive, ChevronRight, ChevronDown, Settings, Users, Truck, ScrollTextIcon, Calendar, CheckCircle } from "lucide-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 // import logo from "../assets/images/logo.png";
 import { User, LogOut, Key, X } from "lucide-react";
 import { authApi } from "../api/auth.api";
 import { message } from "antd";
+import { EventSourcePolyfill } from "event-source-polyfill";
 
 const SidebarLeft: React.FC = () => {
+    const location = useLocation();
     const [openPartner, setOpenPartner] = useState(false);
     const [collapsed, setCollapsed] = useState(false);
     const [showProfileModal, setShowProfileModal] = useState(false);
@@ -18,12 +20,85 @@ const SidebarLeft: React.FC = () => {
     const [confirmPassword, setConfirmPassword] = useState("");
     const [errors, setErrors] = useState<{ old?: string; new?: string; confirm?: string }>({});
     const [menuOpen, setMenuOpen] = useState(false);
+    const [pendingApprovalCount, setPendingApprovalCount] = useState(0);
+
+    // Kiểm tra quyền ADMIN hoặc MANAGER
+    const checkPermission = () => {
+        const userStr = localStorage.getItem("user");
+        if (!userStr) return false;
+        try {
+            const user = JSON.parse(userStr);
+            const role = user?.role?.name || user?.role || "";
+            return role === "ADMIN" || role === "MANAGER";
+        } catch {
+            return false;
+        }
+    };
+
+    const hasPermission = checkPermission();
 
     useEffect(() => {
         if (location.pathname.startsWith("/partners")) {
             setOpenPartner(true);
         }
+        // Reset badge khi vào trang ScheduleApproval
+        if (location.pathname === "/ScheduleApproval") {
+            setPendingApprovalCount(0);
+        }
     }, [location.pathname]);
+
+    // Realtime SSE nhận thông báo yêu cầu phê duyệt mới
+    useEffect(() => {
+        if (!hasPermission) return;
+
+        const token = localStorage.getItem("token");
+        if (!token) return;
+
+        const baseUrl = import.meta.env.VITE_API_BASE_URL?.replace(/\/+$/, "") || "";
+        const streamUrl = `${baseUrl}/realtime/history-schudule/stream`;
+
+        const es = new EventSourcePolyfill(streamUrl, {
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+        });
+
+        es.addEventListener("connected", (event: MessageEvent) => {
+            console.log("Connected to history schedule stream in Sidebar:", event.data);
+        });
+
+        es.addEventListener("newHistorySchudule", (event: MessageEvent) => {
+            try {
+                const item = JSON.parse(event.data);
+                if (!item) return;
+
+                // Chỉ tăng badge nếu không đang ở trang ScheduleApproval
+                if (location.pathname !== "/ScheduleApproval") {
+                    setPendingApprovalCount((prev) => prev + 1);
+                }
+            } catch (err) {
+                console.error("Error handling newHistorySchudule event in Sidebar", err);
+            }
+        });
+
+        es.addEventListener("deleteHistorySchudule", () => {
+            try {
+                // Khi có yêu cầu bị xóa (đã duyệt/từ chối), không cần giảm badge
+                // vì badge chỉ đếm số yêu cầu mới đến
+            } catch (err) {
+                console.error("Error handling deleteHistorySchudule event in Sidebar", err);
+            }
+        });
+
+        es.onerror = (err: any) => {
+            console.warn("SSE error in Sidebar (will auto-reconnect):", err);
+        };
+
+        return () => {
+            es.close();
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [hasPermission, location.pathname]);
 
     // 👉 class cho menu chính
     const navItemClass = ({ isActive }: { isActive: boolean }) =>
@@ -150,6 +225,34 @@ const SidebarLeft: React.FC = () => {
                     <ScrollTextIcon className="w-5 h-5" />
                     {!collapsed && <span>Lịch làm việc</span>}
                 </NavLink>
+                {hasPermission && (
+                    <NavLink to="/ScheduleManagement" className={navItemClass}>
+                        <Calendar className="w-5 h-5" />
+                        {!collapsed && <span>Quản lý ca đăng ký lịch làm việc</span>}
+                    </NavLink>
+                )}
+                {hasPermission && (
+                    <NavLink to="/ScheduleApproval" className={navItemClass}>
+                        <div className="relative">
+                            <CheckCircle className="w-5 h-5" />
+                            {pendingApprovalCount > 0 && (
+                                <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold text-white bg-red-500 rounded-full border-2 border-white dark:border-gray-800">
+                                    {pendingApprovalCount > 99 ? "99+" : pendingApprovalCount}
+                                </span>
+                            )}
+                        </div>
+                        {!collapsed && (
+                            <div className="flex items-center gap-2 flex-1">
+                                <span>Phê duyệt Ca đăng ký</span>
+                                {pendingApprovalCount > 0 && (
+                                    <span className="flex items-center justify-center min-w-[20px] h-5 px-1.5 text-xs font-bold text-white bg-red-500 rounded-full">
+                                        {pendingApprovalCount > 99 ? "99+" : pendingApprovalCount}
+                                    </span>
+                                )}
+                            </div>
+                        )}
+                    </NavLink>
+                )}
                 <NavLink to="/ManagerEmploy" className={navItemClass}>
                     <ScrollTextIcon className="w-5 h-5" />
                     {!collapsed && <span>Hồ sơ nhân viên</span>}
