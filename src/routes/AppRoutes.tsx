@@ -9,11 +9,9 @@ import Projects from "../pages/Projects";
 import Calendar from "../pages/Calendar";
 import ManagerEmploy from "../pages/ManagerEmploy";
 import EmployDetail from "../pages/EmployDetail";
-<<<<<<< HEAD
 import ScheduleApproval from "../pages/ScheduleApproval";
-=======
 import AddEmploys from "../pages/AddEmploys";
->>>>>>> c73ae098a66be0db28a52ed51c63cd93327a3a84
+import PrivateRoute from "../pages/PrivateRoute";
 
 const AppRoutes = () => {
     return (
@@ -25,7 +23,7 @@ const AppRoutes = () => {
 
                 </Route>
                 {/* PRIVATE ROUTES */}
-                {/* <Route element={<PrivateRoute />}> */}
+                <Route element={<PrivateRoute />}>
                 <Route element={<MainLayout />}>
                     <Route path="/" element={<Dashboard />} />
                     <Route path="/Wage" element={<Wage />} />
@@ -36,7 +34,7 @@ const AppRoutes = () => {
                     <Route path="/ManagerEmploy/AddEmploys" element={<AddEmploys />} />
                     <Route path="/EmployDetail" element={<EmployDetail />} />
                 </Route>
-                {/* </Route> */}
+                </Route>
             </Routes>
         </Router>
     );

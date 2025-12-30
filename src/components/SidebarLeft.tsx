@@ -5,6 +5,7 @@ import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { User, LogOut, Key, X } from "lucide-react";
 import { authApi } from "../api/auth.api";
 import { message } from "antd";
+import { tokenService } from "../utils/token";
 
 const SidebarLeft: React.FC = () => {
     const [openPartner, setOpenPartner] = useState(false);
@@ -83,14 +84,13 @@ const SidebarLeft: React.FC = () => {
             // Xóa local storage
             localStorage.removeItem("token");
             localStorage.removeItem("user");
-
+            tokenService.clearTokens();
             message.success("Đã đăng xuất");
             navigate("/login");
         } catch (error) {
             // Dù API lỗi vẫn logout local để tránh kẹt user
             localStorage.removeItem("token");
             localStorage.removeItem("user");
-
             message.warning("Phiên đăng nhập đã hết hạn");
             // navigate("/login");
         }

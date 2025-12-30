@@ -1,5 +1,7 @@
 import axiosClient from "./axiosClient";
 import type { ApiResponse } from "../types/api.type";
+import { tokenService } from "../utils/token";
+
 
 export interface LoginPayload {
     emailOrUsername: string;
@@ -30,6 +32,14 @@ export const authApi = {
                 headers: {
                     Authorization: `Bearer ${token}`,
                 },
+            }
+        );
+    },
+    refreshToken() {
+        return axiosClient.post(
+            "/auth/refresh",
+            {
+                refreshToken: tokenService.getRefreshToken(),
             }
         );
     },

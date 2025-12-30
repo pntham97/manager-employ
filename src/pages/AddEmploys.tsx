@@ -1,13 +1,114 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { employsApi } from "../api/employs.api";
+
+interface Role {
+    id: string;
+    name: string;
+}
+
+interface Supplier {
+    id: number;
+    name: string;
+    status: boolean;
+}
+
+interface Position {
+    id: number;
+    name: string;
+}
 
 
 const AddEmploys = () => {
     const [showPassword, setShowPassword] = useState(false);
-    const handleAddEmploys = (e: React.FormEvent<HTMLFormElement>) => {
-        e.preventDefault();      // 🚫 ngăn submit reload trang
-        e.stopPropagation();     // 🚫 ngăn sự kiện nổi bọt (bubble)
-        console.log(e, " value");
+    const [roles, setRoles] = useState<Role[]>([]);
+    const [username, setUsername] = useState("");
+    const [usernameError, setUsernameError] = useState<string | null>(null);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<any>(null);
+    const [employs, setEmploys] = useState({
+        suppliers: [] as Supplier[],
+        positions: [] as Position[],
+    });
+    const [form, setForm] = useState({
+        userName: "",
+        email: "",
+        password: "",
+        employeeName: "",
+        phone: "",
+        address: "",
+        positionId: "",
+        supplierId: "",
+        roleId: "",
+    });
+    useEffect(() => {
+        const fetchRoles = async () => {
+            try {
+                setLoading(true);
+                const res = await employsApi.getRole();
+                setRoles(res.data);
+            } catch (err: any) {
+                console.error(err);
+                setError("Không thể tải danh sách role");
+            } finally {
+                setLoading(false);
+            }
+        };
+        const fetchEmploys = async () => {
+            try {
+                setLoading(true);
+                const res = await employsApi.getEmploys();
+                setEmploys(res.data);
+            } catch (err: any) {
+                console.error(err);
+                setError("Không thể tải danh sách role");
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchEmploys();
+        fetchRoles();
+    }, []);
+
+    const validateUsername = (username: string): string | null => {
+        if (!username) return "Username is required";
+        if (username.length < 6 || username.length > 255) {
+            return "Username must be between 6 and 255 characters";
+        }
+        return null;
+    };
+    const handleAddEmploys = async (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        const formData = new FormData(e.currentTarget);
+        const username = formData.get("username") as string;
+
+        // ✅ validate trước
+        const usernameError = validateUsername(username);
+        if (usernameError) {
+            setUsernameError(usernameError); // nếu bạn có state hiển thị lỗi
+            return; // 🚫 DỪNG – KHÔNG CALL API
+        }
+
+        const payload = {
+            userName: formData.get("username") as string,
+            password: formData.get("password") as string,
+            email: formData.get("email") as string,
+            address: formData.get("address") as string,
+            employeeName: formData.get("name") as string,
+            phone: formData.get("phoneNumber") as string,
+            supplierId: +form.supplierId,
+            positionId: +form.positionId,
+            roleCodeId: form.roleId as string,
+        };
+
+        try {
+            const res = await employsApi.postEmploys(payload);
+            console.log("Tạo nhân viên thành công:", res.data);
+        } catch (error) {
+            console.error("Lỗi tạo nhân viên:", error);
+        }
     }
+
     return (
         <div className="layout-content-container flex flex-col w-full px-16 mt-8  flex-1 gap-6">
 
@@ -39,13 +140,37 @@ const AddEmploys = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
                         <label className="flex flex-col gap-2">
-                            <span className="text-slate-900 dark:text-slate-200 text-sm font-medium leading-normal">Tên đăng nhập <span className="text-red-500">*</span></span>
+                            <span className="text-slate-900 dark:text-slate-200 text-sm font-medium leading-normal">
+                                Tên đăng nhập <span className="text-red-500">*</span>
+                            </span>
+
                             <div className="relative">
                                 <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 flex items-center pointer-events-none">
                                     <span className="material-symbols-outlined text-[20px]">person</span>
                                 </div>
-                                <input name="username" className="form-input w-full rounded-lg border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 h-12 pl-10 pr-4 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm" placeholder="Nhập tên đăng nhập" type="text" />
+
+                                <input
+                                    type="text"
+                                    value={username}
+                                    onChange={(e) => {
+                                        const value = e.target.value;
+                                        setUsername(value);
+                                        setUsernameError(validateUsername(value)); // ✅ validate realtime
+                                    }}
+                                    onBlur={() => {
+                                        setUsernameError(validateUsername(username)); // ✅ validate khi blur
+                                    }}
+                                    name="username"
+                                    placeholder="Nhập tên đăng nhập"
+                                    className="form-input w-full rounded-lg border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 h-12 pl-10 pr-4 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm"
+                                />
                             </div>
+
+                            {usernameError && (
+                                <span className="text-xs text-red-500">
+                                    {usernameError}
+                                </span>
+                            )}
                         </label>
 
                         <label className="flex flex-col gap-2">
@@ -81,6 +206,15 @@ const AddEmploys = () => {
                                 <input name="email" className="form-input w-full rounded-lg border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 h-12 pl-10 pr-4 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm" placeholder="example@company.com" type="email" />
                             </div>
                         </label>
+                        <label className="flex flex-col gap-2 md:col-span-2">
+                            <span className="text-slate-900 dark:text-slate-200 text-sm font-medium leading-normal">Địa chỉ <span className="text-red-500">*</span></span>
+                            <div className="relative">
+                                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 flex items-center pointer-events-none">
+                                    <span className="material-symbols-outlined text-[20px]">place</span>
+                                </div>
+                                <input name="address" className="form-input w-full rounded-lg border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 h-12 pl-10 pr-4 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm" placeholder="Địa chỉ thường trú " />
+                            </div>
+                        </label>
                     </div>
                 </div>
 
@@ -114,12 +248,22 @@ const AddEmploys = () => {
                                 <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 flex items-center pointer-events-none">
                                     <span className="material-symbols-outlined text-[20px]">apartment</span>
                                 </div>
-                                <select className="form-select w-full rounded-lg border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white h-12 pl-10 pr-10 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm appearance-none cursor-pointer">
+                                <select
+                                    value={form.supplierId}
+                                    onChange={(e) =>
+                                        setForm({ ...form, supplierId: e.target.value })
+                                    }
+                                    className="form-select w-full rounded-lg border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white h-12 pl-10 pr-10 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm appearance-none cursor-pointer"
+                                >
                                     <option value="">Chọn địa chỉ làm việc...</option>
-                                    <option value="vp_hanoi">Văn phòng Hà Nội - Keangnam</option>
-                                    <option value="vp_hcm">Văn phòng TP.HCM - Landmark 81</option>
-                                    <option value="vp_danang">Văn phòng Đà Nẵng</option>
-                                    <option value="remote">Làm việc từ xa</option>
+
+                                    {employs.suppliers
+                                        .filter((s) => s.status)
+                                        .map((sup) => (
+                                            <option key={sup.id} value={sup.id}>
+                                                {sup.name}
+                                            </option>
+                                        ))}
                                 </select>
                                 <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 flex items-center pointer-events-none">
                                     <span className="material-symbols-outlined text-[20px]">arrow_drop_down</span>
@@ -133,13 +277,45 @@ const AddEmploys = () => {
                                 <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 flex items-center pointer-events-none">
                                     <span className="material-symbols-outlined text-[20px]">work</span>
                                 </div>
-                                <select className="form-select w-full rounded-lg border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white h-12 pl-10 pr-10 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm appearance-none cursor-pointer">
+                                <select
+                                    value={form.positionId}
+                                    onChange={(e) =>
+                                        setForm({ ...form, positionId: e.target.value })
+                                    }
+                                    className="form-select w-full rounded-lg border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white h-12 pl-10 pr-10 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm appearance-none cursor-pointer"
+                                >
                                     <option value="">Chọn chức vụ...</option>
-                                    <option value="dev">Lập trình viên (Developer)</option>
-                                    <option value="designer">Thiết kế UI/UX</option>
-                                    <option value="pm">Quản lý dự án (PM)</option>
-                                    <option value="hr">Nhân sự (HR)</option>
-                                    <option value="qa">Kiểm thử (QA)</option>
+
+                                    {employs.positions.map((pos) => (
+                                        <option key={pos.id} value={pos.id}>
+                                            {pos.name}
+                                        </option>
+                                    ))}
+                                </select>
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 flex items-center pointer-events-none">
+                                    <span className="material-symbols-outlined text-[20px]">arrow_drop_down</span>
+                                </div>
+                            </div>
+                        </label>
+                        <label className="flex flex-col gap-2">
+                            <span className="text-slate-900 dark:text-slate-200 text-sm font-medium leading-normal">Role</span>
+                            <div className="relative">
+                                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 flex items-center pointer-events-none">
+                                    <span className="material-symbols-outlined text-[20px]">work</span>
+                                </div>
+                                <select
+                                    value={form.roleId}
+                                    onChange={(e) =>
+                                        setForm({ ...form, roleId: e.target.value })
+                                    }
+                                    className="form-select w-full rounded-lg border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white h-12 pl-10 pr-10 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm appearance-none cursor-pointer"
+                                >
+                                    <option value="">Chọn role...</option>
+                                    {roles.map((pos) => (
+                                        <option key={pos.id} value={pos.id}>
+                                            {pos.name}
+                                        </option>
+                                    ))}
                                 </select>
                                 <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 flex items-center pointer-events-none">
                                     <span className="material-symbols-outlined text-[20px]">arrow_drop_down</span>
