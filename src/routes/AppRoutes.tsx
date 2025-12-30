@@ -12,6 +12,7 @@ import EmployDetail from "../pages/EmployDetail";
 import ScheduleApproval from "../pages/ScheduleApproval";
 import ScheduleManagement from "../pages/ScheduleManagement";
 import AddEmploys from "../pages/AddEmploys";
+import PrivateRoute from "../pages/PrivateRoute";
 
 const AppRoutes = () => {
     return (
@@ -23,19 +24,19 @@ const AppRoutes = () => {
 
                 </Route>
                 {/* PRIVATE ROUTES */}
-                {/* <Route element={<PrivateRoute />}> */}
-                <Route element={<MainLayout />}>
-                    <Route path="/" element={<Dashboard />} />
-                    <Route path="/Wage" element={<Wage />} />
-                    <Route path="/Projects" element={<Projects />} />.
-                    <Route path="/Calendar" element={<Calendar />} />
-                    <Route path="/ScheduleApproval" element={<ScheduleApproval />} />
-                    <Route path="/ScheduleManagement" element={<ScheduleManagement />} />
-                    <Route path="/ManagerEmploy" element={<ManagerEmploy />} />
-                    <Route path="/ManagerEmploy/AddEmploys" element={<AddEmploys />} />
-                    <Route path="/EmployDetail" element={<EmployDetail />} />
+                <Route element={<PrivateRoute />}>
+                    <Route element={<MainLayout />}>
+                        <Route path="/" element={<Dashboard />} />
+                        <Route path="/Wage" element={<Wage />} />
+                        <Route path="/Projects" element={<Projects />} />.
+                        <Route path="/Calendar" element={<Calendar />} />
+                        <Route path="/ScheduleApproval" element={<ScheduleApproval />} />
+                        <Route path="/ScheduleManagement" element={<ScheduleManagement />} />
+                        <Route path="/ManagerEmploy" element={<ManagerEmploy />} />
+                        <Route path="/ManagerEmploy/AddEmploys" element={<AddEmploys />} />
+                        <Route path="/EmployDetail" element={<EmployDetail />} />
+                    </Route>
                 </Route>
-                {/* </Route> */}
             </Routes>
         </Router>
     );
