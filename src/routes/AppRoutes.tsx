@@ -9,6 +9,7 @@ import Projects from "../pages/Projects";
 import Calendar from "../pages/Calendar";
 import ManagerEmploy from "../pages/ManagerEmploy";
 import EmployDetail from "../pages/EmployDetail";
+import ScheduleApproval from "../pages/ScheduleApproval";
 
 const AppRoutes = () => {
     return (
@@ -26,6 +27,7 @@ const AppRoutes = () => {
                     <Route path="/Wage" element={<Wage />} />
                     <Route path="/Projects" element={<Projects />} />.
                     <Route path="/Calendar" element={<Calendar />} />
+                    <Route path="/ScheduleApproval" element={<ScheduleApproval />} />
                     <Route path="/ManagerEmploy" element={<ManagerEmploy />} />
                     <Route path="/EmployDetail" element={<EmployDetail />} />
                 </Route>
