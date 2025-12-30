@@ -9,7 +9,11 @@ import Projects from "../pages/Projects";
 import Calendar from "../pages/Calendar";
 import ManagerEmploy from "../pages/ManagerEmploy";
 import EmployDetail from "../pages/EmployDetail";
+<<<<<<< HEAD
 import ScheduleApproval from "../pages/ScheduleApproval";
+=======
+import AddEmploys from "../pages/AddEmploys";
+>>>>>>> c73ae098a66be0db28a52ed51c63cd93327a3a84
 
 const AppRoutes = () => {
     return (
@@ -29,6 +33,7 @@ const AppRoutes = () => {
                     <Route path="/Calendar" element={<Calendar />} />
                     <Route path="/ScheduleApproval" element={<ScheduleApproval />} />
                     <Route path="/ManagerEmploy" element={<ManagerEmploy />} />
+                    <Route path="/ManagerEmploy/AddEmploys" element={<AddEmploys />} />
                     <Route path="/EmployDetail" element={<EmployDetail />} />
                 </Route>
                 {/* </Route> */}
