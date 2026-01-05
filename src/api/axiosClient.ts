@@ -56,8 +56,8 @@ axiosClient.interceptors.response.use(
       try {
         const res = await authApi.refreshToken();
         const newAccessToken = res.data.accessToken;
-
-        tokenService.setTokens(newAccessToken);
+        const NewrefreshToken = res.data.refreshToken;
+        tokenService.setTokens(newAccessToken, NewrefreshToken);
 
         axiosClient.defaults.headers.Authorization =
           `Bearer ${newAccessToken}`;
