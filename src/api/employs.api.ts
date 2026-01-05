@@ -4,12 +4,28 @@ export interface RegisterEmployPayload {
     userName: string;
     email: string;
     password: string;
-    roleCodeId?: string;   // optional
     employeeName: string;
     phone: string;
     address: string;
     positionId: number;
     supplierId: number;
+    roleCodeId: string;
+    joinDate: string;
+    gender: boolean;
+    nationality: string;
+    dateOfBirth: string;
+    identityNumber: string;
+    taxCode: string;
+    workEmail: string;
+    bankName: string;
+    bankAccountNumber: string;
+    bankAccountHolderName: string;
+    typeWorkId: number;
+    contractImgUrl?: string;
+    contractSigningDate?: string;
+    contractType?: boolean;
+    emergencyContactName: string;
+    emergencyContactPhone: string;
 }
 
 export const employsApi = {

@@ -36,7 +36,21 @@ const SidebarLeft: React.FC = () => {
         }
     };
 
+    // Kiểm tra role của user
+    const getUserRole = () => {
+        const userStr = localStorage.getItem("user");
+        if (!userStr) return null;
+        try {
+            const user = JSON.parse(userStr);
+            return user?.role?.name || user?.role || null;
+        } catch {
+            return null;
+        }
+    };
+
     const hasPermission = checkPermission();
+    const userRole = getUserRole();
+    const isAdmin = userRole === "ADMIN";
 
     useEffect(() => {
         if (location.pathname.startsWith("/partners")) {
@@ -221,10 +235,12 @@ const SidebarLeft: React.FC = () => {
                 </NavLink>
 
                 {/* HÓA ĐƠN */}
-                <NavLink to="/Calendar" className={navItemClass}>
-                    <ScrollTextIcon className="w-5 h-5" />
-                    {!collapsed && <span>Lịch làm việc</span>}
-                </NavLink>
+                {!isAdmin && (
+                    <NavLink to="/Calendar" className={navItemClass}>
+                        <ScrollTextIcon className="w-5 h-5" />
+                        {!collapsed && <span>Lịch làm việc</span>}
+                    </NavLink>
+                )}
                 {hasPermission && (
                     <NavLink to="/ScheduleManagement" className={navItemClass}>
                         <Calendar className="w-5 h-5" />

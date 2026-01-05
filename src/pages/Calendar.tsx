@@ -1,8 +1,27 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { shiftTypeSupplierApi } from "../api/shiftTypeSupplier.api";
 import { scheduleApi } from "../api/schedule.api";
 
 const Calendar = () => {
+    const navigate = useNavigate();
+
+    // Kiểm tra role và redirect nếu là ADMIN
+    useEffect(() => {
+        const userStr = localStorage.getItem("user");
+        if (userStr) {
+            try {
+                const user = JSON.parse(userStr);
+                const role = user?.role?.name || user?.role || "";
+                if (role === "ADMIN") {
+                    // Redirect về trang chủ nếu là ADMIN
+                    navigate("/");
+                }
+            } catch (error) {
+                console.error("Failed to parse user data", error);
+            }
+        }
+    }, [navigate]);
 
     const today = new Date();
     const [currentDate, setCurrentDate] = useState(
@@ -223,10 +242,24 @@ const Calendar = () => {
         try {
             setPendingHistoryId(historyItem.id ?? null);
 
-            await scheduleApi.deleteHistory({
+            const deleteHistoryParams = {
                 typeHistoryName,
                 dateRequest: dateRequestRaw,
                 detailShiftTypeId,
+            };
+
+            console.log("🚀 [API CALL] Gọi API deleteHistory:", {
+                endpoint: "DELETE /schedule/history",
+                params: deleteHistoryParams,
+                historyItemId: historyItem.id,
+                timestamp: new Date().toISOString(),
+            });
+
+            const deleteHistoryResponse = await scheduleApi.deleteHistory(deleteHistoryParams);
+
+            console.log("✅ [API SUCCESS] API deleteHistory thành công:", {
+                response: deleteHistoryResponse,
+                timestamp: new Date().toISOString(),
             });
 
             // Sau khi backend xử lý xong, reload lại lịch sử và lịch đăng ký
@@ -253,10 +286,14 @@ const Calendar = () => {
                 { historyPayload, schedulePayload }
             );
         } catch (error: any) {
-            console.error(
-                "Lỗi khi hủy lịch sử yêu cầu thay đổi:",
-                error.response?.data || error.message
-            );
+            console.error("❌ [API ERROR] Lỗi khi gọi API deleteHistory:", {
+                endpoint: "DELETE /schedule/history",
+                error: error.response?.data || error.message,
+                status: error.response?.status,
+                statusText: error.response?.statusText,
+                fullError: error,
+                timestamp: new Date().toISOString(),
+            });
             const errorMessage =
                 error.response?.data?.message ||
                 error.message ||
