@@ -563,8 +563,23 @@ const ManagerEmploy = () => {
                                                 <td className="px-6 py-4 whitespace-nowrap">
                                                     <div className="flex items-center">
                                                         <div className="flex-shrink-0 h-10 w-10">
-                                                            <div className="h-10 w-10 rounded-full bg-[white] flex items-center justify-center text-white font-bold ring-2 ring-white dark:ring-gray-700">
-                                                                {getInitials(employee.name)}
+                                                            <div
+                                                                className="h-10 w-10 rounded-full overflow-hidden 
+        bg-white dark:bg-gray-700 
+        flex items-center justify-center 
+        ring-2 ring-white dark:ring-gray-700"
+                                                            >
+                                                                {employee.avatarUrl ? (
+                                                                    <img
+                                                                        src={employee.avatarUrl}
+                                                                        alt={employee.name}
+                                                                        className="h-full w-full object-cover"
+                                                                    />
+                                                                ) : (
+                                                                    <span className="text-sm font-bold text-gray-700 dark:text-gray-200">
+                                                                        {getInitials(employee.name)}
+                                                                    </span>
+                                                                )}
                                                             </div>
                                                         </div>
                                                         <div className="ml-4">

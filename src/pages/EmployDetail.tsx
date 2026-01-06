@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation, useNavigate, Link } from "react-router-dom";
 import { employeeApi, type EmployeeResponse, type UpdateEmployeeRequest, type TypeWork, type Company } from "../api/employee.api";
 
@@ -21,6 +21,10 @@ const EmployDetail = () => {
     const navigate = useNavigate();
     const employee = location.state?.employee as EmployeeResponse | undefined;
     const [showBankAccount, setShowBankAccount] = useState(false);
+    const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+    const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+    const [uploading, setUploading] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement | null>(null);
     const [isEditing, setIsEditing] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -205,25 +209,96 @@ const EmployDetail = () => {
 
         try {
             setSubmitting(true);
-            const response = await employeeApi.updateEmployee(employee.employeeId, formData);
+
+            // ✅ GỘP URL avatar (nếu có upload mới)
+            const submitData = {
+                ...formData,
+                avatarUrl: avatarUrl || formData.avatarUrl,
+            };
+
+            const response = await employeeApi.updateEmployee(
+                employee.employeeId,
+                submitData
+            );
 
             if (response.data) {
-                // Cập nhật employee data trong location state
                 navigate("/EmployDetail", {
                     state: { employee: response.data },
                     replace: true
                 });
+
                 setIsEditing(false);
                 alert("Cập nhật thông tin nhân viên thành công!");
             }
         } catch (error: any) {
             console.error("Failed to update employee", error);
-            alert(error.response?.data?.message || "Có lỗi xảy ra khi cập nhật thông tin nhân viên");
+            alert(
+                error.response?.data?.message ||
+                "Có lỗi xảy ra khi cập nhật thông tin nhân viên"
+            );
         } finally {
             setSubmitting(false);
         }
     };
 
+    const handleAvatarClick = () => {
+        if (!isEditing || uploading) return;
+        fileInputRef.current?.click();
+    };
+
+    const uploadAvatarToCloudinary = async (file: File) => {
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("upload_preset", "suhuku");
+
+        const res = await fetch(
+            "https://api.cloudinary.com/v1_1/dyztuzywx/image/upload",
+            {
+                method: "POST",
+                body: formData,
+            }
+        );
+
+        if (!res.ok) {
+            throw new Error("Upload failed");
+        }
+
+        const data = await res.json();
+        return data.secure_url as string;
+    };
+    const handleAvatarChange = async (
+        e: React.ChangeEvent<HTMLInputElement>
+    ) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        // validate
+        if (!file.type.startsWith("image/")) {
+            alert("Chỉ được upload ảnh");
+            return;
+        }
+
+        if (file.size > 5 * 1024 * 1024) {
+            alert("Ảnh tối đa 5MB");
+            return;
+        }
+
+        // preview ngay
+        const previewUrl = URL.createObjectURL(file);
+        setAvatarPreview(previewUrl);
+
+        // upload
+        try {
+            setUploading(true);
+            const url = await uploadAvatarToCloudinary(file);
+            setAvatarUrl(url); // 👈 URL cloudinary
+        } catch (err) {
+            alert("Upload ảnh thất bại");
+            setAvatarPreview(null);
+        } finally {
+            setUploading(false);
+        }
+    };
     // Tính thâm niên từ ngày gia nhập
     const calculateTenure = (joinDate: string | undefined | null): string => {
         if (!joinDate) return "N/A";
@@ -300,7 +375,16 @@ const EmployDetail = () => {
                     </button>
                     {!isEditing ? (
                         <button
-                            onClick={() => setIsEditing(true)}
+                            onClick={() => {
+                                setIsEditing(true);
+
+                                // ✅ reset trạng thái avatar để edit lại
+                                setAvatarPreview(null);
+                                setAvatarUrl(null);
+                                if (fileInputRef.current) {
+                                    fileInputRef.current.value = "";
+                                }
+                            }}
                             className="flex items-center justify-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-bold text-black hover:text-white hover:bg-blue-700 transition-colors shadow-sm shadow-blue-500/20"
                         >
                             <span className="material-symbols-outlined text-[20px]">edit</span>
@@ -308,7 +392,16 @@ const EmployDetail = () => {
                         </button>
                     ) : (
                         <button
-                            onClick={() => setIsEditing(false)}
+                            onClick={() => {
+                                setIsEditing(false);
+
+                                // ✅ hủy upload, quay về avatar cũ
+                                setAvatarPreview(null);
+                                setAvatarUrl(null);
+                                if (fileInputRef.current) {
+                                    fileInputRef.current.value = "";
+                                }
+                            }}
                             className="flex items-center justify-center gap-2 rounded-lg border border-border-light dark:border-border-dark bg-white dark:bg-surface-dark px-4 py-2 text-sm font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                         >
                             <span className="material-symbols-outlined text-[20px]">close</span>
@@ -323,19 +416,48 @@ const EmployDetail = () => {
                 <div className="absolute right-0 top-0 h-32 w-32 -mr-8 -mt-8 rounded-full bg-primary/10 blur-3xl"></div>
                 <div className="relative flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
                     <div className="flex flex-col gap-6 md:flex-row md:items-center">
-                        <div className="h-28 w-28 shrink-0 overflow-hidden rounded-full border-4 border-white dark:border-gray-800 shadow-md">
-                            {employee?.avatarUrl ? (
-                                <img alt="Chân dung nhân viên" className="h-full w-full object-cover" src={employee.avatarUrl} />
-                            ) : (
-                                <img
-                                    alt="Chân dung nhân viên mặc định"
-                                    className="h-full w-full object-cover"
-                                    src={employee?.gender
+                        <div
+                            onClick={handleAvatarClick}
+                            className={`relative h-28 w-28 shrink-0 overflow-hidden rounded-full 
+    border-4 border-white dark:border-gray-800 shadow-md
+    ${isEditing ? "cursor-pointer group" : ""}`}
+                        >
+                            <img
+                                alt="Chân dung nhân viên"
+                                className="h-full w-full object-cover"
+                                src={
+                                    avatarPreview ||
+                                    avatarUrl ||
+                                    employee?.avatarUrl ||
+                                    (employee?.gender
                                         ? "https://blog.vn.revu.net/wp-content/uploads/2025/09/anh-son-tung-mtp-thumb.jpg"
-                                        : "https://i.pinimg.com/originals/4c/e5/2a/4ce52a5518ecb3daef9770148a80f21a.jpg"
-                                    }
-                                />
+                                        : "https://i.pinimg.com/originals/4c/e5/2a/4ce52a5518ecb3daef9770148a80f21a.jpg")
+                                }
+                            />
+
+                            {/* Overlay chỉ khi edit */}
+                            {isEditing && (
+                                <div
+                                    className="absolute inset-0 flex items-center justify-center 
+            bg-black/40 opacity-0 group-hover:opacity-100 transition"
+                                >
+                                    {uploading ? (
+                                        <span className="text-white text-sm">Uploading...</span>
+                                    ) : (
+                                        <span className="material-symbols-outlined text-white text-3xl">
+                                            photo_camera
+                                        </span>
+                                    )}
+                                </div>
                             )}
+
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={handleAvatarChange}
+                            />
                         </div>
                         <div className="flex flex-col">
                             <div className="flex flex-wrap items-center gap-3">
@@ -427,7 +549,7 @@ const EmployDetail = () => {
                                     className="w-full px-3 py-2 border border-border-light dark:border-border-dark rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
                                 />
                             </div>
-                            <div>
+                            {/* <div>
                                 <label className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Ảnh đại diện</label>
                                 <button
                                     type="button"
@@ -442,7 +564,7 @@ const EmployDetail = () => {
                                     <span className="material-symbols-outlined text-lg">image</span>
                                     <span>Chỉnh sửa ảnh</span>
                                 </button>
-                            </div>
+                            </div> */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Giới tính *</label>
                                 <select
@@ -704,7 +826,7 @@ const EmployDetail = () => {
                         <button
                             type="submit"
                             disabled={submitting}
-                            className="px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {submitting ? "Đang lưu..." : "Lưu thay đổi"}
                         </button>
@@ -875,20 +997,20 @@ const EmployDetail = () => {
                             <div className="relative border-l-2 border-gray-100 dark:border-gray-800 ml-3 space-y-8">
 
                                 <div className="relative ml-6">
-                                    <span className="absolute -left-[31px] top-1.5 h-4 w-4 rounded-full border-2 border-white bg-primary dark:border-gray-900"></span>
+                                    <span className="absolute -left-[33px] top-1.5 h-4 w-4 rounded-full border-2 border-white bg-blue-500 dark:border-gray-900"></span>
                                     <h4 className="text-sm font-bold text-gray-900 dark:text-white">Thăng chức Senior Engineer</h4>
                                     <p className="text-xs text-gray-500 mt-1">01/01/2023</p>
                                     <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">Được bổ nhiệm vị trí mới sau đánh giá hiệu suất năm 2022.</p>
                                 </div>
 
                                 <div className="relative ml-6">
-                                    <span className="absolute -left-[31px] top-1.5 h-4 w-4 rounded-full border-2 border-white bg-gray-300 dark:border-gray-900 dark:bg-gray-600"></span>
+                                    <span className="absolute -left-[33px] top-1.5 h-4 w-4 rounded-full border-2 border-white bg-gray-300 dark:border-gray-900 dark:bg-gray-600"></span>
                                     <h4 className="text-sm font-bold text-gray-900 dark:text-white">Ký hợp đồng chính thức</h4>
                                     <p className="text-xs text-gray-500 mt-1">12/07/2021</p>
                                 </div>
 
                                 <div className="relative ml-6">
-                                    <span className="absolute -left-[31px] top-1.5 h-4 w-4 rounded-full border-2 border-white bg-gray-300 dark:border-gray-900 dark:bg-gray-600"></span>
+                                    <span className="absolute -left-[33px] top-1.5 h-4 w-4 rounded-full border-2 border-white bg-gray-300 dark:border-gray-900 dark:bg-gray-600"></span>
                                     <h4 className="text-sm font-bold text-gray-900 dark:text-white">Gia nhập công ty</h4>
                                     <p className="text-xs text-gray-500 mt-1">12/05/2021</p>
                                     <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">Vị trí: Software Engineer (Thử việc)</p>

@@ -35,6 +35,8 @@ const AddEmploys = () => {
     const [username, setUsername] = useState("");
     const [usernameError, setUsernameError] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
+    type FormErrors = Partial<Record<keyof typeof form, string>>;
+    const [errors, setErrors] = useState<FormErrors>({});
     const [employs, setEmploys] = useState({
         suppliers: [] as Supplier[],
         positions: [] as Position[],
@@ -153,6 +155,57 @@ const AddEmploys = () => {
             }));
         }
     }, [selectedCompanyId, companies, allSuppliers]);
+    const validateForm = () => {
+        const newErrors: FormErrors = {};
+
+        // CMND / CCCD: 9 hoặc 12 số
+        if (!form.identityNumber) {
+            newErrors.identityNumber = 'Vui lòng nhập CMND/CCCD';
+        } else if (!/^(\d{9}|\d{12})$/.test(form.identityNumber)) {
+            newErrors.identityNumber = 'CMND/CCCD phải gồm 9 hoặc 12 số';
+        }
+
+        // Mã số thuế: 10 hoặc 13 số
+        if (form.taxCode && !/^(\d{10}|\d{13})$/.test(form.taxCode)) {
+            newErrors.taxCode = 'Mã số thuế không hợp lệ';
+        }
+
+        // Email công việc
+        if (!form.workEmail) {
+            newErrors.workEmail = 'Vui lòng nhập email';
+        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.workEmail)) {
+            newErrors.workEmail = 'Email không hợp lệ';
+        }
+
+        // Ngân hàng
+        if (!form.bankName) {
+            newErrors.bankName = 'Vui lòng nhập tên ngân hàng';
+        }
+
+        if (!form.bankAccountNumber) {
+            newErrors.bankAccountNumber = 'Vui lòng nhập số tài khoản';
+        } else if (!/^\d{6,20}$/.test(form.bankAccountNumber)) {
+            newErrors.bankAccountNumber = 'Số tài khoản không hợp lệ';
+        }
+
+        if (!form.bankAccountHolderName) {
+            newErrors.bankAccountHolderName = 'Vui lòng nhập tên chủ tài khoản';
+        }
+
+        // Liên hệ khẩn cấp
+        if (!form.emergencyContactName) {
+            newErrors.emergencyContactName = 'Vui lòng nhập họ tên';
+        }
+
+        if (!form.emergencyContactPhone) {
+            newErrors.emergencyContactPhone = 'Vui lòng nhập số điện thoại';
+        } else if (!/^(0|\+84)\d{9,10}$/.test(form.emergencyContactPhone)) {
+            newErrors.emergencyContactPhone = 'Số điện thoại không hợp lệ';
+        }
+
+        setErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
+    };
 
     const validateUsername = (username: string): string | null => {
         if (!username) return "Username is required";
@@ -165,7 +218,7 @@ const AddEmploys = () => {
         e.preventDefault();
         const formData = new FormData(e.currentTarget);
         const username = formData.get("username") as string;
-
+        if (!validateForm()) return;
         // ✅ validate trước
         const usernameError = validateUsername(username);
         if (usernameError) {
@@ -576,7 +629,7 @@ const AddEmploys = () => {
                         </label>
 
                         <label className="flex flex-col gap-2">
-                            <span className="text-slate-900 dark:text-slate-200 text-sm font-medium leading-normal">CMND/CCCD</span>
+                            <span className="text-slate-900 dark:text-slate-200 text-sm font-medium leading-normal">CMND/CCCD<span className="text-red-500">*</span></span>
                             <div className="relative">
                                 <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 flex items-center pointer-events-none">
                                     <span className="material-symbols-outlined text-[20px]">badge</span>
@@ -584,15 +637,21 @@ const AddEmploys = () => {
                                 <input
                                     type="text"
                                     value={form.identityNumber}
-                                    onChange={(e) => setForm({ ...form, identityNumber: e.target.value })}
+                                    onChange={(e) => {
+                                        setForm({ ...form, identityNumber: e.target.value });
+                                        setErrors({ ...errors, identityNumber: undefined });
+                                    }}
                                     placeholder="Nhập số CMND/CCCD"
                                     className="form-input w-full rounded-lg border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 h-12 pl-10 pr-4 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm"
                                 />
                             </div>
+                            {errors.identityNumber && (
+                                <span className="text-xs text-red-500">{errors.identityNumber}</span>
+                            )}
                         </label>
 
                         <label className="flex flex-col gap-2">
-                            <span className="text-slate-900 dark:text-slate-200 text-sm font-medium leading-normal">Mã số thuế</span>
+                            <span className="text-slate-900 dark:text-slate-200 text-sm font-medium leading-normal">Mã số thuế<span className="text-red-500">*</span></span>
                             <div className="relative">
                                 <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 flex items-center pointer-events-none">
                                     <span className="material-symbols-outlined text-[20px]">receipt</span>
@@ -600,15 +659,21 @@ const AddEmploys = () => {
                                 <input
                                     type="text"
                                     value={form.taxCode}
-                                    onChange={(e) => setForm({ ...form, taxCode: e.target.value })}
+                                    onChange={(e) => {
+                                        setForm({ ...form, taxCode: e.target.value })
+                                        setErrors({ ...errors, taxCode: undefined })
+                                    }}
                                     placeholder="Nhập mã số thuế"
                                     className="form-input w-full rounded-lg border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 h-12 pl-10 pr-4 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm"
                                 />
                             </div>
+                            {errors.taxCode && (
+                                <span className="text-xs text-red-500">{errors.taxCode}</span>
+                            )}
                         </label>
 
                         <label className="flex flex-col gap-2">
-                            <span className="text-slate-900 dark:text-slate-200 text-sm font-medium leading-normal">Email công việc</span>
+                            <span className="text-slate-900 dark:text-slate-200 text-sm font-medium leading-normal">Email công việc<span className="text-red-500">*</span></span>
                             <div className="relative">
                                 <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 flex items-center pointer-events-none">
                                     <span className="material-symbols-outlined text-[20px]">mail</span>
@@ -616,11 +681,17 @@ const AddEmploys = () => {
                                 <input
                                     type="email"
                                     value={form.workEmail}
-                                    onChange={(e) => setForm({ ...form, workEmail: e.target.value })}
+                                    onChange={(e) => {
+                                        setForm({ ...form, workEmail: e.target.value })
+                                        setErrors({ ...errors, workEmail: undefined })
+                                    }}
                                     placeholder="work@company.com"
                                     className="form-input w-full rounded-lg border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 h-12 pl-10 pr-4 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm"
                                 />
                             </div>
+                            {errors.workEmail && (
+                                <span className="text-xs text-red-500">{errors.workEmail}</span>
+                            )}
                         </label>
                     </div>
                 </div>
@@ -634,7 +705,7 @@ const AddEmploys = () => {
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <label className="flex flex-col gap-2">
-                            <span className="text-slate-900 dark:text-slate-200 text-sm font-medium leading-normal">Tên ngân hàng</span>
+                            <span className="text-slate-900 dark:text-slate-200 text-sm font-medium leading-normal">Tên ngân hàng<span className="text-red-500">*</span></span>
                             <div className="relative">
                                 <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 flex items-center pointer-events-none">
                                     <span className="material-symbols-outlined text-[20px]">account_balance</span>
@@ -642,15 +713,22 @@ const AddEmploys = () => {
                                 <input
                                     type="text"
                                     value={form.bankName}
-                                    onChange={(e) => setForm({ ...form, bankName: e.target.value })}
+                                    onChange={(e) => {
+                                        setForm({ ...form, bankName: e.target.value })
+                                        setErrors({ ...errors, bankName: undefined })
+                                    }
+                                    }
                                     placeholder="Vietcombank"
                                     className="form-input w-full rounded-lg border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 h-12 pl-10 pr-4 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm"
                                 />
                             </div>
+                            {errors.bankName && (
+                                <span className="text-xs text-red-500">{errors.bankName}</span>
+                            )}
                         </label>
 
                         <label className="flex flex-col gap-2">
-                            <span className="text-slate-900 dark:text-slate-200 text-sm font-medium leading-normal">Số tài khoản</span>
+                            <span className="text-slate-900 dark:text-slate-200 text-sm font-medium leading-normal">Số tài khoản<span className="text-red-500">*</span></span>
                             <div className="relative">
                                 <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 flex items-center pointer-events-none">
                                     <span className="material-symbols-outlined text-[20px]">credit_card</span>
@@ -658,15 +736,21 @@ const AddEmploys = () => {
                                 <input
                                     type="text"
                                     value={form.bankAccountNumber}
-                                    onChange={(e) => setForm({ ...form, bankAccountNumber: e.target.value })}
+                                    onChange={(e) => {
+                                        setForm({ ...form, bankAccountNumber: e.target.value })
+                                        setErrors({ ...errors, bankAccountNumber: undefined })
+                                    }}
                                     placeholder="Nhập số tài khoản"
                                     className="form-input w-full rounded-lg border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 h-12 pl-10 pr-4 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm"
                                 />
                             </div>
+                            {errors.bankAccountNumber && (
+                                <span className="text-xs text-red-500">{errors.bankAccountNumber}</span>
+                            )}
                         </label>
 
                         <label className="flex flex-col gap-2 md:col-span-2">
-                            <span className="text-slate-900 dark:text-slate-200 text-sm font-medium leading-normal">Tên chủ tài khoản</span>
+                            <span className="text-slate-900 dark:text-slate-200 text-sm font-medium leading-normal">Tên chủ tài khoản<span className="text-red-500">*</span></span>
                             <div className="relative">
                                 <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 flex items-center pointer-events-none">
                                     <span className="material-symbols-outlined text-[20px]">person</span>
@@ -674,11 +758,17 @@ const AddEmploys = () => {
                                 <input
                                     type="text"
                                     value={form.bankAccountHolderName}
-                                    onChange={(e) => setForm({ ...form, bankAccountHolderName: e.target.value })}
+                                    onChange={(e) => {
+                                        setForm({ ...form, bankAccountHolderName: e.target.value })
+                                        setErrors({ ...errors, bankAccountHolderName: undefined })
+                                    }}
                                     placeholder="Tên chủ tài khoản"
                                     className="form-input w-full rounded-lg border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 h-12 pl-10 pr-4 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm"
                                 />
                             </div>
+                            {errors.bankAccountHolderName && (
+                                <span className="text-xs text-red-500">{errors.bankAccountHolderName}</span>
+                            )}
                         </label>
                     </div>
                 </div>
@@ -692,7 +782,7 @@ const AddEmploys = () => {
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <label className="flex flex-col gap-2">
-                            <span className="text-slate-900 dark:text-slate-200 text-sm font-medium leading-normal">Họ tên người liên hệ</span>
+                            <span className="text-slate-900 dark:text-slate-200 text-sm font-medium leading-normal">Họ tên người liên hệ<span className="text-red-500">*</span></span>
                             <div className="relative">
                                 <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 flex items-center pointer-events-none">
                                     <span className="material-symbols-outlined text-[20px]">person</span>
@@ -700,15 +790,21 @@ const AddEmploys = () => {
                                 <input
                                     type="text"
                                     value={form.emergencyContactName}
-                                    onChange={(e) => setForm({ ...form, emergencyContactName: e.target.value })}
+                                    onChange={(e) => {
+                                        setForm({ ...form, emergencyContactName: e.target.value })
+                                        setErrors({ ...errors, emergencyContactName: undefined })
+                                    }}
                                     placeholder="Nhập họ tên người liên hệ"
                                     className="form-input w-full rounded-lg border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 h-12 pl-10 pr-4 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm"
                                 />
                             </div>
+                            {errors.emergencyContactName && (
+                                <span className="text-xs text-red-500">{errors.emergencyContactName}</span>
+                            )}
                         </label>
 
                         <label className="flex flex-col gap-2">
-                            <span className="text-slate-900 dark:text-slate-200 text-sm font-medium leading-normal">Số điện thoại liên hệ</span>
+                            <span className="text-slate-900 dark:text-slate-200 text-sm font-medium leading-normal">Số điện thoại liên hệ<span className="text-red-500">*</span></span>
                             <div className="relative">
                                 <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 flex items-center pointer-events-none">
                                     <span className="material-symbols-outlined text-[20px]">call</span>
@@ -716,11 +812,17 @@ const AddEmploys = () => {
                                 <input
                                     type="tel"
                                     value={form.emergencyContactPhone}
-                                    onChange={(e) => setForm({ ...form, emergencyContactPhone: e.target.value })}
+                                    onChange={(e) => {
+                                        setForm({ ...form, emergencyContactPhone: e.target.value })
+                                        setErrors({ ...errors, emergencyContactPhone: undefined })
+                                    }}
                                     placeholder="0912 xxx xxx"
                                     className="form-input w-full rounded-lg border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 h-12 pl-10 pr-4 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm"
                                 />
                             </div>
+                            {errors.emergencyContactPhone && (
+                                <span className="text-xs text-red-500">{errors.emergencyContactPhone}</span>
+                            )}
                         </label>
                     </div>
                 </div>
