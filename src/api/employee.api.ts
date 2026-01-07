@@ -116,6 +116,7 @@ export interface UpdateEmployeeRequest {
     roleName: string;
 }
 export interface PageResponse<T> {
+    data: any;
     content: T[];
     page: number;
     size: number;
