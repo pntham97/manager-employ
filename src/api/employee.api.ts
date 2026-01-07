@@ -113,6 +113,7 @@ export interface UpdateEmployeeRequest {
     bankAccountHolderName: string;
     emergencyContactName: string;
     emergencyContactPhone: string;
+    roleName: string;
 }
 export interface PageResponse<T> {
     content: T[];
@@ -160,17 +161,23 @@ export const employeeApi = {
         page: number = 0,
         size: number = 10,
         employeeName?: string,
-        supplierId?: number
+        supplierId?: number,
+        companyId?: number,
+        signal?: AbortSignal
     ): Promise<ApiResponse<PageResponse<EmployeeResponse>>> {
-        const params: { page: number; size: number; employeeName?: string; supplierId?: number } = { page, size };
+        const params: { page: number; size: number; employeeName?: string; supplierId?: number; companyId?: number } = { page, size };
         if (employeeName && employeeName.trim()) {
             params.employeeName = employeeName.trim();
         }
         if (supplierId) {
             params.supplierId = supplierId;
         }
+        if (companyId) {
+            params.companyId = companyId;
+        }
         return axiosClient.get("/employee/list", {
             params,
+            signal,
         });
     },
 

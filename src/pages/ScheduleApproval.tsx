@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 // Nếu dùng TypeScript, đảm bảo đã khai báo module "event-source-polyfill" trong file d.ts
 import { EventSourcePolyfill } from "event-source-polyfill";
 import { scheduleApi } from "../api/schedule.api";
+import { tokenService } from "../utils/token";
 
 const ScheduleApproval = () => {
     const today = new Date();
@@ -73,93 +74,153 @@ const ScheduleApproval = () => {
     useEffect(() => {
         if (!hasPermission) return;
 
-        const token = localStorage.getItem("token");
-        if (!token) return;
+        const token = tokenService.getAccessToken();
+        if (!token) {
+            console.warn("⚠️ No access token found, skipping SSE connection in ScheduleApproval");
+            return;
+        }
 
         const baseUrl = import.meta.env.VITE_API_BASE_URL?.replace(/\/+$/, "") || "";
         const streamUrl = `${baseUrl}/realtime/history-schudule/stream`;
 
-        const es = new EventSourcePolyfill(streamUrl, {
-            headers: {
-                Authorization: `Bearer ${token}`,
-            },
-        });
+        let es: EventSourcePolyfill | null = null;
+        let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
+        let reconnectAttempts = 0;
+        const maxReconnectAttempts = 5;
+        const reconnectDelay = 3000; // 3 seconds
 
-        es.addEventListener("connected", (event: MessageEvent) => {
-            console.log("Connected to history schedule stream:", event.data);
-        });
+        const connectSSE = () => {
+            // Kiểm tra token lại trước khi kết nối
+            const currentToken = tokenService.getAccessToken();
+            if (!currentToken) {
+                console.warn("⚠️ Token expired, stopping SSE reconnection attempts in ScheduleApproval");
+                return;
+            }
 
-        es.addEventListener("newHistorySchudule", (event: MessageEvent) => {
             try {
-                const item = JSON.parse(event.data); // 1 HistorySchuduleResponse
-                if (!item) return;
-
-                // Xác định ngày của bản ghi mới (ưu tiên dateRequest, fallback createdAt)
-                const rawDate = item?.dateRequest || item?.createdAt;
-                if (!rawDate) return;
-
-                const d = new Date(rawDate);
-                if (isNaN(d.getTime())) return;
-
-                const month = d.getMonth();
-                const year = d.getFullYear();
-
-                // Chỉ cập nhật khi đúng tháng/năm đang xem
-                if (month !== currentMonth || year !== currentYear) return;
-
-                setApprovalData((prev) => {
-                    if (!Array.isArray(prev) || prev.length === 0) {
-                        return [item];
-                    }
-
-                    const existsIndex = prev.findIndex((x: any) => x?.id === item?.id);
-
-                    // Nếu đã tồn tại id -> cập nhật phần tử đó
-                    if (existsIndex !== -1) {
-                        const clone = [...prev];
-                        clone[existsIndex] = item;
-                        return clone;
-                    }
-
-                    // Nếu chưa có -> thêm mới lên đầu danh sách
-                    return [item, ...prev];
+                es = new EventSourcePolyfill(streamUrl, {
+                    headers: {
+                        Authorization: `Bearer ${currentToken}`,
+                    },
                 });
-            } catch (err) {
-                console.error("Error handling newHistorySchudule event", err);
-            }
-        });
 
-        // Event khi một history bị xoá khỏi danh sách chờ duyệt
-        es.addEventListener("deleteHistorySchudule", (event: MessageEvent) => {
-            try {
-                // Backend gửi Integer, có thể là "123" hoặc JSON "123"
-                const raw = event.data;
-                const parsed = (() => {
+                es.addEventListener("connected", (event: MessageEvent) => {
+                    console.log("✅ Connected to history schedule stream:", event.data);
+                    reconnectAttempts = 0; // Reset counter on successful connection
+                });
+
+                es.addEventListener("newHistorySchudule", (event: MessageEvent) => {
                     try {
-                        return JSON.parse(raw);
-                    } catch {
-                        return Number(raw);
+                        const item = JSON.parse(event.data); // 1 HistorySchuduleResponse
+                        if (!item) return;
+
+                        // Xác định ngày của bản ghi mới (ưu tiên dateRequest, fallback createdAt)
+                        const rawDate = item?.dateRequest || item?.createdAt;
+                        if (!rawDate) return;
+
+                        const d = new Date(rawDate);
+                        if (isNaN(d.getTime())) return;
+
+                        const month = d.getMonth();
+                        const year = d.getFullYear();
+
+                        // Chỉ cập nhật khi đúng tháng/năm đang xem
+                        if (month !== currentMonth || year !== currentYear) return;
+
+                        setApprovalData((prev) => {
+                            if (!Array.isArray(prev) || prev.length === 0) {
+                                return [item];
+                            }
+
+                            const existsIndex = prev.findIndex((x: any) => x?.id === item?.id);
+
+                            // Nếu đã tồn tại id -> cập nhật phần tử đó
+                            if (existsIndex !== -1) {
+                                const clone = [...prev];
+                                clone[existsIndex] = item;
+                                return clone;
+                            }
+
+                            // Nếu chưa có -> thêm mới lên đầu danh sách
+                            return [item, ...prev];
+                        });
+                    } catch (err) {
+                        console.error("❌ Error handling newHistorySchudule event", err);
                     }
-                })();
+                });
 
-                const deletedId = Number(parsed);
-                if (!deletedId || Number.isNaN(deletedId)) return;
+                // Event khi một history bị xoá khỏi danh sách chờ duyệt
+                es.addEventListener("deleteHistorySchudule", (event: MessageEvent) => {
+                    try {
+                        // Backend gửi Integer, có thể là "123" hoặc JSON "123"
+                        const raw = event.data;
+                        const parsed = (() => {
+                            try {
+                                return JSON.parse(raw);
+                            } catch {
+                                return Number(raw);
+                            }
+                        })();
 
-                setApprovalData((prev) =>
-                    Array.isArray(prev) ? prev.filter((item: any) => item?.id !== deletedId) : prev
-                );
-            } catch (err) {
-                console.error("Error handling deleteHistorySchudule event", err);
+                        const deletedId = Number(parsed);
+                        if (!deletedId || Number.isNaN(deletedId)) return;
+
+                        setApprovalData((prev) =>
+                            Array.isArray(prev) ? prev.filter((item: any) => item?.id !== deletedId) : prev
+                        );
+                    } catch (err) {
+                        console.error("❌ Error handling deleteHistorySchudule event", err);
+                    }
+                });
+
+                es.onerror = (err: any) => {
+                    const errorStatus = err?.status || err?.target?.status;
+
+                    if (errorStatus === 401) {
+                        console.warn("⚠️ SSE 401 Unauthorized in ScheduleApproval - Token may be expired");
+                        // Không reconnect nếu là lỗi 401, có thể token đã hết hạn
+                        if (es) {
+                            es.close();
+                            es = null;
+                        }
+                    } else {
+                        // Các lỗi khác (network, timeout) thì thử reconnect
+                        if (reconnectAttempts < maxReconnectAttempts) {
+                            reconnectAttempts++;
+                            console.warn(`⚠️ SSE error in ScheduleApproval (attempt ${reconnectAttempts}/${maxReconnectAttempts}, will retry in ${reconnectDelay}ms):`, err);
+
+                            if (es) {
+                                es.close();
+                                es = null;
+                            }
+
+                            reconnectTimeout = setTimeout(() => {
+                                connectSSE();
+                            }, reconnectDelay);
+                        } else {
+                            console.error("❌ Max reconnect attempts reached for ScheduleApproval SSE");
+                            if (es) {
+                                es.close();
+                                es = null;
+                            }
+                        }
+                    }
+                };
+            } catch (error) {
+                console.error("❌ Error creating SSE connection in ScheduleApproval:", error);
             }
-        });
-
-        es.onerror = (err: any) => {
-            // Không tự đóng kết nối, để EventSourcePolyfill tự xử lý reconnect
-            console.warn("SSE error in ScheduleApproval (will auto-reconnect):", err);
         };
 
+        // Kết nối lần đầu
+        connectSSE();
+
         return () => {
-            es.close();
+            if (reconnectTimeout) {
+                clearTimeout(reconnectTimeout);
+            }
+            if (es) {
+                es.close();
+            }
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [hasPermission, currentMonth, currentYear]);

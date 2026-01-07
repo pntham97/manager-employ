@@ -1,13 +1,15 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { EventSourcePolyfill } from "event-source-polyfill";
-import { employeeApi, type EmployeeResponse, type PageResponse, type EmployeeStatusEvent } from "../api/employee.api";
+import { employeeApi, type EmployeeResponse, type PageResponse, type EmployeeStatusEvent, type Company } from "../api/employee.api";
+import { tokenService } from "../utils/token";
 
 interface Supplier {
     id: number;
     name: string;
     status: boolean;
     createdAt: string;
+    companyId?: number;
 }
 
 const ManagerEmploy = () => {
@@ -17,9 +19,10 @@ const ManagerEmploy = () => {
     const [page, setPage] = useState(0);
     const [size] = useState(10); // Cố định size = 10
     const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-    const [employeeNameInput, setEmployeeNameInput] = useState<string>(""); // Giá trị input tìm kiếm
+    const [companies, setCompanies] = useState<Company[]>([]);
     const [employeeName, setEmployeeName] = useState<string>(""); // Tên nhân viên để tìm kiếm (đã debounce)
     const [selectedSupplierId, setSelectedSupplierId] = useState<number | undefined>(undefined); // Supplier ID được chọn
+    const [selectedCompanyId, setSelectedCompanyId] = useState<number | undefined>(undefined);
     const [pagination, setPagination] = useState<{
         totalElements: number;
         totalPages: number;
@@ -31,7 +34,9 @@ const ManagerEmploy = () => {
         first: true,
         last: true,
     });
-    const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const searchInputRef = useRef<HTMLInputElement | null>(null);
+    const lastQueryKeyRef = useRef<string>("");
+    const abortRef = useRef<AbortController | null>(null);
 
     // Format ngày tháng
     const formatDate = (dateString: string) => {
@@ -124,29 +129,51 @@ const ManagerEmploy = () => {
         return name.substring(0, 2).toUpperCase();
     };
 
-    // Load danh sách suppliers
-    const loadSuppliers = async () => {
+    // Load danh sách công ty và suppliers theo công ty
+    const loadCompaniesAndSuppliers = async () => {
         try {
-            const res = await employeeApi.getSuppliersPositions();
-            const suppliersData = res.data?.suppliers || [];
-            // Chỉ lấy suppliers có status = true
+            const res = await employeeApi.getTypeWorksAndCompanies();
+            const companiesData = res.data?.companies || [];
+            setCompanies(companiesData);
+
+            // Ghép suppliers kèm companyId để tiện lọc
+            const suppliersData: Supplier[] = companiesData.flatMap((c: Company) =>
+                (c.suppliers || []).map((s) => ({
+                    ...s,
+                    companyId: c.id,
+                }))
+            );
+
             setSuppliers(suppliersData.filter((s: Supplier) => s.status === true));
         } catch (error) {
-            console.error("Failed to load suppliers", error);
+            console.error("Failed to load companies/suppliers", error);
         }
     };
 
     // Gọi API lấy danh sách nhân viên
-    const fetchEmployees = async (currentPage: number, pageSize: number, searchName?: string, supplierId?: number) => {
+    const fetchEmployees = async (currentPage: number, pageSize: number, searchName?: string, supplierId?: number, companyId?: number) => {
         try {
+            const queryKey = JSON.stringify({ currentPage, pageSize, searchName, supplierId, companyId });
+            if (queryKey === lastQueryKeyRef.current) {
+                return; // Bỏ qua nếu tham số không đổi để tránh call thừa
+            }
+            lastQueryKeyRef.current = queryKey;
+
+            // Huỷ call trước đó nếu còn pending
+            if (abortRef.current) {
+                abortRef.current.abort();
+            }
+            const controller = new AbortController();
+            abortRef.current = controller;
+
             setLoading(true);
             console.log("🚀 [API CALL] Gọi API getList:", {
                 endpoint: `GET /employee/list`,
-                params: { page: currentPage, size: pageSize, employeeName: searchName, supplierId },
+                params: { page: currentPage, size: pageSize, employeeName: searchName, supplierId, companyId },
                 timestamp: new Date().toISOString(),
             });
 
-            const response = await employeeApi.getList(currentPage, pageSize, searchName, supplierId);
+            const response = await employeeApi.getList(currentPage, pageSize, searchName, supplierId, companyId, controller.signal);
 
             console.log("✅ [API SUCCESS] API getList thành công:", {
                 response: response.data,
@@ -186,6 +213,10 @@ const ManagerEmploy = () => {
                 setEmployees([]);
             }
         } catch (error: any) {
+            if (error?.name === "CanceledError" || error?.name === "AbortError") {
+                console.warn("⚠️ Request bị huỷ (stale):", error?.message);
+                return;
+            }
             console.error("❌ [API ERROR] Lỗi khi gọi API getList:", {
                 endpoint: `GET /employee/list`,
                 error: error.response?.data || error.message,
@@ -199,91 +230,141 @@ const ManagerEmploy = () => {
         }
     };
 
-    // Load suppliers khi component mount
+    // Load companies + suppliers khi component mount
     useEffect(() => {
-        loadSuppliers();
+        loadCompaniesAndSuppliers();
     }, []);
-
-    // Debounce search input: cập nhật employeeName sau 500ms khi người dùng ngừng gõ
-    useEffect(() => {
-        // Clear timeout cũ nếu có
-        if (searchTimeoutRef.current) {
-            clearTimeout(searchTimeoutRef.current);
-        }
-
-        // Đặt timeout mới
-        searchTimeoutRef.current = setTimeout(() => {
-            setEmployeeName(employeeNameInput);
-            // Reset về trang đầu tiên khi tìm kiếm
-            setPage(0);
-        }, 500);
-
-        // Cleanup function
-        return () => {
-            if (searchTimeoutRef.current) {
-                clearTimeout(searchTimeoutRef.current);
-            }
-        };
-    }, [employeeNameInput]);
 
     // Reset page về 0 khi supplierId thay đổi
     useEffect(() => {
         setPage(0);
     }, [selectedSupplierId]);
 
+    // Reset supplier + page khi company thay đổi
+    useEffect(() => {
+        setSelectedSupplierId((prev) => (prev ? undefined : prev));
+        setPage(0);
+    }, [selectedCompanyId]);
+
     // Gọi API khi component mount hoặc page/size/employeeName/selectedSupplierId thay đổi
     useEffect(() => {
-        fetchEmployees(page, size, employeeName || undefined, selectedSupplierId);
-    }, [page, size, employeeName, selectedSupplierId]);
+        fetchEmployees(page, size, employeeName || undefined, selectedSupplierId, selectedCompanyId);
+    }, [page, size, employeeName, selectedSupplierId, selectedCompanyId]);
+    const displayedSuppliers = useMemo(() => {
+        return selectedCompanyId
+            ? suppliers.filter((s) => s.companyId === selectedCompanyId)
+            : suppliers;
+    }, [selectedCompanyId, suppliers]);
+
 
     // Realtime SSE nhận thông báo cập nhật trạng thái online/offline của nhân viên
     useEffect(() => {
-        const token = localStorage.getItem("token");
-        if (!token) return;
+        const token = tokenService.getAccessToken();
+        if (!token) {
+            console.warn("⚠️ No access token found, skipping SSE connection");
+            return;
+        }
 
         const baseUrl = import.meta.env.VITE_API_BASE_URL?.replace(/\/+$/, "") || "";
         const streamUrl = `${baseUrl}/realtime/employee-status/stream`;
 
-        const es = new EventSourcePolyfill(streamUrl, {
-            headers: {
-                Authorization: `Bearer ${token}`,
-            },
-        });
+        let es: EventSourcePolyfill | null = null;
+        let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
+        let reconnectAttempts = 0;
+        const maxReconnectAttempts = 5;
+        const reconnectDelay = 3000; // 3 seconds
 
-        es.addEventListener("connected", (event: MessageEvent) => {
-            console.log("✅ Connected to employee status stream:", event.data);
-        });
-
-        es.addEventListener("employeeStatus", (event: MessageEvent) => {
-            try {
-                const statusData: EmployeeStatusEvent = JSON.parse(event.data);
-                console.log("📢 Received employee status update:", statusData);
-
-                // Cập nhật trạng thái của nhân viên trong danh sách
-                setEmployees((prevEmployees) => {
-                    return prevEmployees.map((emp) => {
-                        if (emp.employeeId === statusData.employeeId) {
-                            return {
-                                ...emp,
-                                online: statusData.isOnline,
-                                lastOfflineAt: statusData.lastOfflineAt || "",
-                            };
-                        }
-                        return emp;
-                    });
-                });
-            } catch (err) {
-                console.error("❌ Error handling employeeStatus event:", err);
+        const connectSSE = () => {
+            // Kiểm tra token lại trước khi kết nối
+            const currentToken = tokenService.getAccessToken();
+            if (!currentToken) {
+                console.warn("⚠️ Token expired, stopping SSE reconnection attempts");
+                return;
             }
-        });
 
-        es.onerror = (err: any) => {
-            // Không tự đóng kết nối, để EventSourcePolyfill tự xử lý reconnect
-            console.warn("⚠️ SSE error in employee status stream (will auto-reconnect):", err);
+            try {
+                es = new EventSourcePolyfill(streamUrl, {
+                    headers: {
+                        Authorization: `Bearer ${currentToken}`,
+                    },
+                });
+
+                es.addEventListener("connected", (event: MessageEvent) => {
+                    console.log("✅ Connected to employee status stream:", event.data);
+                    reconnectAttempts = 0; // Reset counter on successful connection
+                });
+
+                es.addEventListener("employeeStatus", (event: MessageEvent) => {
+                    try {
+                        const statusData: EmployeeStatusEvent = JSON.parse(event.data);
+                        console.log("📢 Received employee status update:", statusData);
+
+                        // Cập nhật trạng thái của nhân viên trong danh sách
+                        setEmployees((prevEmployees) => {
+                            return prevEmployees.map((emp) => {
+                                if (emp.employeeId === statusData.employeeId) {
+                                    return {
+                                        ...emp,
+                                        online: statusData.isOnline,
+                                        lastOfflineAt: statusData.lastOfflineAt || "",
+                                    };
+                                }
+                                return emp;
+                            });
+                        });
+                    } catch (err) {
+                        console.error("❌ Error handling employeeStatus event:", err);
+                    }
+                });
+
+                es.onerror = (err: any) => {
+                    const errorStatus = err?.status || err?.target?.status;
+
+                    if (errorStatus === 401) {
+                        console.warn("⚠️ SSE 401 Unauthorized - Token may be expired");
+                        // Không reconnect nếu là lỗi 401, có thể token đã hết hạn
+                        if (es) {
+                            es.close();
+                            es = null;
+                        }
+                    } else {
+                        // Các lỗi khác (network, timeout) thì thử reconnect
+                        if (reconnectAttempts < maxReconnectAttempts) {
+                            reconnectAttempts++;
+                            console.warn(`⚠️ SSE error in employee status stream (attempt ${reconnectAttempts}/${maxReconnectAttempts}, will retry in ${reconnectDelay}ms):`, err);
+
+                            if (es) {
+                                es.close();
+                                es = null;
+                            }
+
+                            reconnectTimeout = setTimeout(() => {
+                                connectSSE();
+                            }, reconnectDelay);
+                        } else {
+                            console.error("❌ Max reconnect attempts reached for employee status stream");
+                            if (es) {
+                                es.close();
+                                es = null;
+                            }
+                        }
+                    }
+                };
+            } catch (error) {
+                console.error("❌ Error creating SSE connection:", error);
+            }
         };
 
+        // Kết nối lần đầu
+        connectSSE();
+
         return () => {
-            es.close();
+            if (reconnectTimeout) {
+                clearTimeout(reconnectTimeout);
+            }
+            if (es) {
+                es.close();
+            }
         };
     }, []);
 
@@ -451,7 +532,7 @@ const ManagerEmploy = () => {
                 </div>
             </div>
             <div className="bg-white dark:bg-card-dark rounded-xl shadow-soft p-4 mb-6 border border-border-light dark:border-border-dark">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div className="md:col-span-1 relative">
                         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                             <span className="material-icons-outlined text-text-secondary-light dark:text-text-secondary-dark">search</span>
@@ -460,9 +541,43 @@ const ManagerEmploy = () => {
                             className="block w-full pl-10 pr-3 py-2 border border-border-light dark:border-border-dark rounded-lg leading-5 bg-gray-50 dark:bg-gray-800 placeholder-text-secondary-light dark:placeholder-text-secondary-dark focus:outline-none focus:ring-1 focus:ring-[white] focus:border-[white] sm:text-sm text-text-main-light dark:text-text-main-dark transition-colors"
                             placeholder="Tìm kiếm theo tên nhân viên..."
                             type="text"
-                            value={employeeNameInput}
-                            onChange={(e) => setEmployeeNameInput(e.target.value)}
+                            ref={searchInputRef}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                    const value = searchInputRef.current?.value || "";
+                                    setEmployeeName(value);
+                                    setPage(0);
+                                }
+                            }}
                         />
+                        <button
+                            className="absolute inset-y-0 right-0 flex items-center pr-3 text-text-secondary-light dark:text-text-secondary-dark hover:text-[white]"
+                            onClick={() => {
+                                const value = searchInputRef.current?.value || "";
+                                setEmployeeName(value);
+                                setPage(0);
+                            }}
+                            type="button"
+                        >
+                            <span className="material-icons-outlined text-base">search</span>
+                        </button>
+                    </div>
+                    <div className="md:col-span-1">
+                        <select
+                            className="block w-full pl-3 pr-10 py-2 text-base border border-border-light dark:border-border-dark focus:outline-none focus:ring-[white] focus:border-[white] sm:text-sm rounded-lg bg-gray-50 dark:bg-gray-800 text-text-main-light dark:text-text-main-dark"
+                            value={selectedCompanyId || ""}
+                            onChange={(e) => {
+                                const value = e.target.value;
+                                setSelectedCompanyId(value ? Number(value) : undefined);
+                            }}
+                        >
+                            <option value="">Tất cả công ty</option>
+                            {companies.map((company) => (
+                                <option key={company.id} value={company.id}>
+                                    {company.name}
+                                </option>
+                            ))}
+                        </select>
                     </div>
                     <div className="md:col-span-1">
                         <select
@@ -474,7 +589,7 @@ const ManagerEmploy = () => {
                             }}
                         >
                             <option value="">Tất cả supplier</option>
-                            {suppliers.map((supplier) => (
+                            {displayedSuppliers.map((supplier) => (
                                 <option key={supplier.id} value={supplier.id}>
                                     {supplier.name}
                                 </option>

@@ -1,6 +1,14 @@
 import axiosClient from "./axiosClient";
 import type { ApiResponse } from "../types/api.type";
 
+export interface CreateShiftTypeSupplierRequest {
+    name: string;
+    supplierId: number;
+    shiftTypeId: number;
+    startDate: string; // YYYY-MM-DD
+    endDate: string; // YYYY-MM-DD
+}
+
 export const shiftTypeSupplierApi = {
     getByMonthYear(
         supplierId: number,
@@ -35,6 +43,10 @@ export const shiftTypeSupplierApi = {
             console.error("[shiftTypeSupplierApi.getByMonthYearAdminManager] Error response:", error.response?.data);
             throw error;
         });
+    },
+
+    create(data: CreateShiftTypeSupplierRequest): Promise<ApiResponse<any>> {
+        return axiosClient.post("/shift-type-supplier", data);
     },
 };
 
