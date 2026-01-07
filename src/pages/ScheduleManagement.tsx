@@ -408,13 +408,17 @@ const ScheduleManagement = () => {
                     item.employeeNames.push(employee.name);
                 }
 
-                // Ưu tiên đếm USER/MANAGER; còn lại cũng gom vào USER để không bị 0
-                const roleName = (employee?.role?.name || employee?.role || "").toString().toUpperCase();
+                // Ưu tiên roleName (backend), sau đó role.name/role và chuẩn hóa uppercase
+                const rawRoleName = employee?.roleName ?? employee?.role?.name ?? employee?.role ?? "";
+                const roleName = rawRoleName ? String(rawRoleName).toUpperCase() : "";
+
                 if (roleName === "MANAGER") {
                     item.managerCount += 1;
                 } else if (roleName === "USER") {
                     item.userCount += 1;
                 } else {
+                    // Vai trò khác: vẫn cộng vào userCount để tránh 0 và lưu lại otherCount
+                    item.otherCount += 1;
                     item.userCount += 1;
                 }
             });

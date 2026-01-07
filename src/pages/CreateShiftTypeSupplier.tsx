@@ -42,6 +42,15 @@ const CreateShiftTypeSupplier = () => {
     });
     const [errors, setErrors] = useState<Partial<Record<keyof CreateShiftTypeSupplierRequest, string>>>({});
 
+    // State phục vụ tạo mới loại ca (shift type)
+    const [showCreateShiftTypeModal, setShowCreateShiftTypeModal] = useState(false);
+    const [newShiftName, setNewShiftName] = useState("");
+    const [newNumberOfShift, setNewNumberOfShift] = useState<number>(1);
+    const [newDetails, setNewDetails] = useState<
+        Array<{ name: string; startAt: string; endAt: string }>
+    >([{ name: "Ca 1", startAt: "", endAt: "" }]);
+    const [createShiftError, setCreateShiftError] = useState<string | null>(null);
+
     // Kiểm tra quyền ADMIN hoặc MANAGER
     const checkPermission = () => {
         const userStr = localStorage.getItem("user");
@@ -89,12 +98,28 @@ const CreateShiftTypeSupplier = () => {
                 if (isAdmin && activeSuppliers.length > 0 && form.supplierId === 0) {
                     setForm(prev => ({ ...prev, supplierId: activeSuppliers[0].id }));
                 }
+
+                // Nếu là MANAGER, lấy supplierId từ employee trong localStorage
+                if (userRole === "MANAGER" && form.supplierId === 0) {
+                    try {
+                        const employeeStr = localStorage.getItem("employee");
+                        if (employeeStr) {
+                            const employee = JSON.parse(employeeStr);
+                            const managerSupplierId = employee?.supplierId;
+                            if (managerSupplierId) {
+                                setForm(prev => ({ ...prev, supplierId: managerSupplierId }));
+                            }
+                        }
+                    } catch (error) {
+                        console.error("Failed to get supplierId from employee", error);
+                    }
+                }
             } catch (error: any) {
                 console.error("Failed to load suppliers", error);
             }
         };
         loadSuppliers();
-    }, [hasPermission, isAdmin]);
+    }, [hasPermission, isAdmin, userRole]);
 
     // Prefill startDate nếu có query ?startDate=YYYY-MM-DD
     useEffect(() => {
@@ -129,6 +154,82 @@ const CreateShiftTypeSupplier = () => {
         }
     }, [hasPermission, navigate]);
 
+    // Đồng bộ số lượng chi tiết ca với số ca khi tạo mới loại ca
+    const syncDetailCount = (count: number) => {
+        setNewDetails((prev) => {
+            const cloned = [...prev];
+            if (count > cloned.length) {
+                const startIndex = cloned.length;
+                for (let i = startIndex; i < count; i++) {
+                    cloned.push({
+                        name: `Ca ${i + 1}`,
+                        startAt: "",
+                        endAt: "",
+                    });
+                }
+            } else if (count < cloned.length) {
+                cloned.length = count;
+            }
+            return cloned;
+        });
+    };
+
+    // Gọi API tạo mới shift type + detail shift types
+    const handleCreateShiftType = async () => {
+        setCreateShiftError(null);
+
+        if (!newShiftName.trim()) {
+            setCreateShiftError("Tên loại ca là bắt buộc");
+            return;
+        }
+
+        if (newNumberOfShift <= 0) {
+            setCreateShiftError("Số ca phải lớn hơn 0");
+            return;
+        }
+
+        if (newDetails.length > newNumberOfShift) {
+            setCreateShiftError(
+                `Số lượng chi tiết ca (${newDetails.length}) không được vượt quá số lượng ca (${newNumberOfShift})`
+            );
+            return;
+        }
+
+        try {
+            const payload = {
+                name: newShiftName.trim(),
+                numberOfShift: newNumberOfShift,
+                detailShiftTypes: newDetails.map((d) => ({
+                    name: d.name.trim() || "Ca",
+                    startAt: d.startAt,
+                    endAt: d.endAt,
+                })),
+            };
+
+            const res = await shiftTypeApi.create(payload);
+            const apiData: any = (res as any)?.data ?? (res as any);
+            const created: any = apiData?.data ?? apiData;
+
+            if (!created?.id) {
+                setCreateShiftError("Không nhận được dữ liệu loại ca vừa tạo");
+                return;
+            }
+
+            setShiftTypes((prev) => [...prev, created]);
+            setForm((prev) => ({ ...prev, shiftTypeId: created.id }));
+            setSelectedShiftType(created);
+
+            setShowCreateShiftTypeModal(false);
+        } catch (error: any) {
+            const msg =
+                error?.response?.data?.detailShiftTypes ||
+                error?.response?.data?.message ||
+                error?.message ||
+                "Có lỗi xảy ra khi tạo loại ca";
+            setCreateShiftError(msg);
+        }
+    };
+
     const validateForm = (): boolean => {
         const newErrors: Partial<Record<keyof CreateShiftTypeSupplierRequest, string>> = {};
 
@@ -136,7 +237,25 @@ const CreateShiftTypeSupplier = () => {
             newErrors.name = "Tên là bắt buộc";
         }
 
-        if (!form.supplierId || form.supplierId === 0) {
+        // Với MANAGER, tự động lấy supplierId từ employee nếu chưa có
+        if (userRole === "MANAGER" && (!form.supplierId || form.supplierId === 0)) {
+            try {
+                const employeeStr = localStorage.getItem("employee");
+                if (employeeStr) {
+                    const employee = JSON.parse(employeeStr);
+                    const managerSupplierId = employee?.supplierId;
+                    if (managerSupplierId) {
+                        setForm(prev => ({ ...prev, supplierId: managerSupplierId }));
+                    } else {
+                        newErrors.supplierId = "Không tìm thấy thông tin văn phòng";
+                    }
+                } else {
+                    newErrors.supplierId = "Không tìm thấy thông tin văn phòng";
+                }
+            } catch (error) {
+                newErrors.supplierId = "Không tìm thấy thông tin văn phòng";
+            }
+        } else if (isAdmin && (!form.supplierId || form.supplierId === 0)) {
             newErrors.supplierId = "Văn phòng là bắt buộc";
         }
 
@@ -173,9 +292,29 @@ const CreateShiftTypeSupplier = () => {
 
         try {
             setSubmitting(true);
+
+            // Đảm bảo MANAGER có supplierId từ employee
+            let finalSupplierId = form.supplierId;
+            if (userRole === "MANAGER" && (!finalSupplierId || finalSupplierId === 0)) {
+                try {
+                    const employeeStr = localStorage.getItem("employee");
+                    if (employeeStr) {
+                        const employee = JSON.parse(employeeStr);
+                        finalSupplierId = employee?.supplierId;
+                        if (!finalSupplierId) {
+                            alert("Không tìm thấy thông tin văn phòng. Vui lòng liên hệ quản trị viên.");
+                            return;
+                        }
+                    }
+                } catch (error) {
+                    alert("Không tìm thấy thông tin văn phòng. Vui lòng liên hệ quản trị viên.");
+                    return;
+                }
+            }
+
             const payload: CreateShiftTypeSupplierRequest = {
                 name: form.name.trim(),
-                supplierId: form.supplierId,
+                supplierId: finalSupplierId,
                 shiftTypeId: form.shiftTypeId,
                 startDate: form.startDate,
                 endDate: form.endDate,
@@ -272,7 +411,7 @@ const CreateShiftTypeSupplier = () => {
                             {errors.supplierId && (
                                 <span className="text-xs text-red-500">{errors.supplierId}</span>
                             )}
-                            {!isAdmin && (
+                            {userRole === "MANAGER" && (
                                 <span className="text-xs text-slate-500 dark:text-slate-400">
                                     Văn phòng sẽ được tự động lấy từ thông tin của bạn
                                 </span>
@@ -289,11 +428,19 @@ const CreateShiftTypeSupplier = () => {
                                 </div>
                                 {shiftTypes.length > 0 ? (
                                     <select
-                                        value={form.shiftTypeId}
+                                        value={form.shiftTypeId || 0}
                                         onChange={(e) => {
-                                            const id = +e.target.value;
+                                            const value = e.target.value;
+
+                                            if (value === "NEW") {
+                                                setShowCreateShiftTypeModal(true);
+                                                setCreateShiftError(null);
+                                                return;
+                                            }
+
+                                            const id = +value;
                                             setForm({ ...form, shiftTypeId: id });
-                                            const found = shiftTypes.find(st => st.id === id) || null;
+                                            const found = shiftTypes.find((st) => st.id === id) || null;
                                             setSelectedShiftType(found);
                                         }}
                                         className="form-select w-full rounded-lg border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white h-12 pl-10 pr-10 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm appearance-none cursor-pointer"
@@ -304,6 +451,7 @@ const CreateShiftTypeSupplier = () => {
                                                 {st.name}
                                             </option>
                                         ))}
+                                        <option value="NEW">+ Tạo mới loại ca...</option>
                                     </select>
                                 ) : (
                                     <input
@@ -403,6 +551,156 @@ const CreateShiftTypeSupplier = () => {
                     </button>
                 </div>
             </form>
+
+            {showCreateShiftTypeModal && (
+                <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center px-4">
+                    <div className="bg-white dark:bg-slate-900 rounded-lg shadow-xl max-w-lg w-full p-6 space-y-4">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
+                                Tạo mới loại ca
+                            </h3>
+                            <button
+                                type="button"
+                                className="text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+                                onClick={() => setShowCreateShiftTypeModal(false)}
+                            >
+                                <span className="material-symbols-outlined">close</span>
+                            </button>
+                        </div>
+
+                        {createShiftError && (
+                            <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
+                                {createShiftError}
+                            </div>
+                        )}
+
+                        <div className="space-y-3">
+                            <div>
+                                <label className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                                    Tên loại ca
+                                </label>
+                                <input
+                                    type="text"
+                                    value={newShiftName}
+                                    onChange={(e) => setNewShiftName(e.target.value)}
+                                    className="mt-1 w-full rounded-lg border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white h-10 px-3 text-sm"
+                                    placeholder="Ví dụ: 3 CA"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                                    Số ca trong loại ca
+                                </label>
+                                <input
+                                    type="number"
+                                    min={1}
+                                    value={newNumberOfShift}
+                                    onChange={(e) => {
+                                        const v = Number(e.target.value) || 1;
+                                        setNewNumberOfShift(v);
+                                        syncDetailCount(v);
+                                    }}
+                                    className="mt-1 w-full rounded-lg border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white h-10 px-3 text-sm"
+                                />
+                                <p className="text-xs text-slate-500 mt-1">
+                                    Số lượng chi tiết ca không được vượt quá số ca này.
+                                </p>
+                            </div>
+
+                            <div className="space-y-2 max-h-60 overflow-y-auto">
+                                {newDetails.map((d, index) => (
+                                    <div
+                                        key={index}
+                                        className="grid grid-cols-3 gap-2 items-end"
+                                    >
+                                        <div>
+                                            <label className="text-xs font-medium text-slate-700 dark:text-slate-200">
+                                                Tên ca
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={d.name}
+                                                onChange={(e) => {
+                                                    const v = e.target.value;
+                                                    setNewDetails((prev) => {
+                                                        const cloned = [...prev];
+                                                        cloned[index] = {
+                                                            ...cloned[index],
+                                                            name: v,
+                                                        };
+                                                        return cloned;
+                                                    });
+                                                }}
+                                                className="mt-1 w-full rounded-lg border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white h-9 px-2 text-xs"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-medium text-slate-700 dark:text-slate-200">
+                                                Bắt đầu (HH:mm)
+                                            </label>
+                                            <input
+                                                type="time"
+                                                value={d.startAt}
+                                                onChange={(e) => {
+                                                    const v = e.target.value;
+                                                    setNewDetails((prev) => {
+                                                        const cloned = [...prev];
+                                                        cloned[index] = {
+                                                            ...cloned[index],
+                                                            startAt: v,
+                                                        };
+                                                        return cloned;
+                                                    });
+                                                }}
+                                                className="mt-1 w-full rounded-lg border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white h-9 px-2 text-xs"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-medium text-slate-700 dark:text-slate-200">
+                                                Kết thúc (HH:mm)
+                                            </label>
+                                            <input
+                                                type="time"
+                                                value={d.endAt}
+                                                onChange={(e) => {
+                                                    const v = e.target.value;
+                                                    setNewDetails((prev) => {
+                                                        const cloned = [...prev];
+                                                        cloned[index] = {
+                                                            ...cloned[index],
+                                                            endAt: v,
+                                                        };
+                                                        return cloned;
+                                                    });
+                                                }}
+                                                className="mt-1 w-full rounded-lg border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white h-9 px-2 text-xs"
+                                            />
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-800">
+                            <button
+                                type="button"
+                                onClick={() => setShowCreateShiftTypeModal(false)}
+                                className="px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                            >
+                                Hủy
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleCreateShiftType}
+                                className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700"
+                            >
+                                Tạo loại ca
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

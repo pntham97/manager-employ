@@ -17,9 +17,22 @@ export interface ShiftTypeResponse {
     listDetailShiftType?: ShiftTypeDetail[];
 }
 
+export interface ShiftTypeCreateRequest {
+    name: string;
+    numberOfShift: number;
+    detailShiftTypes: Array<{
+        name: string;
+        startAt: string;
+        endAt: string;
+    }>;
+}
+
 export const shiftTypeApi = {
     getAll(): Promise<ApiResponse<ShiftTypeResponse[]>> {
         return axiosClient.get("/shift-types");
     },
-};
 
+    create(payload: ShiftTypeCreateRequest): Promise<ApiResponse<ShiftTypeResponse>> {
+        return axiosClient.post("/shift-types", payload);
+    },
+};
