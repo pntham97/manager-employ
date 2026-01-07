@@ -66,51 +66,112 @@ const SidebarLeft: React.FC = () => {
     useEffect(() => {
         if (!hasPermission) return;
 
-        const token = localStorage.getItem("token");
-        if (!token) return;
+        const token = tokenService.getAccessToken();
+        if (!token) {
+            console.warn("⚠️ No access token found, skipping SSE connection in Sidebar");
+            return;
+        }
 
         const baseUrl = import.meta.env.VITE_API_BASE_URL?.replace(/\/+$/, "") || "";
         const streamUrl = `${baseUrl}/realtime/history-schudule/stream`;
 
-        const es = new EventSourcePolyfill(streamUrl, {
-            headers: {
-                Authorization: `Bearer ${token}`,
-            },
-        });
+        let es: EventSourcePolyfill | null = null;
+        let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
+        let reconnectAttempts = 0;
+        const maxReconnectAttempts = 5;
+        const reconnectDelay = 3000; // 3 seconds
 
-        es.addEventListener("connected", (event: MessageEvent) => {
-            console.log("Connected to history schedule stream in Sidebar:", event.data);
-        });
-
-        es.addEventListener("newHistorySchudule", (event: MessageEvent) => {
-            try {
-                const item = JSON.parse(event.data);
-                if (!item) return;
-
-                // Chỉ tăng badge nếu không đang ở trang ScheduleApproval
-                if (location.pathname !== "/ScheduleApproval") {
-                    setPendingApprovalCount((prev) => prev + 1);
-                }
-            } catch (err) {
-                console.error("Error handling newHistorySchudule event in Sidebar", err);
+        const connectSSE = () => {
+            // Kiểm tra token lại trước khi kết nối
+            const currentToken = tokenService.getAccessToken();
+            if (!currentToken) {
+                console.warn("⚠️ Token expired, stopping SSE reconnection attempts in Sidebar");
+                return;
             }
-        });
 
-        es.addEventListener("deleteHistorySchudule", () => {
             try {
-                // Khi có yêu cầu bị xóa (đã duyệt/từ chối), không cần giảm badge
-                // vì badge chỉ đếm số yêu cầu mới đến
-            } catch (err) {
-                console.error("Error handling deleteHistorySchudule event in Sidebar", err);
-            }
-        });
+                es = new EventSourcePolyfill(streamUrl, {
+                    headers: {
+                        Authorization: `Bearer ${currentToken}`,
+                    },
+                });
 
-        es.onerror = (err: any) => {
-            console.warn("SSE error in Sidebar (will auto-reconnect):", err);
+                es.addEventListener("connected", (event: MessageEvent) => {
+                    console.log("✅ Connected to history schedule stream in Sidebar:", event.data);
+                    reconnectAttempts = 0; // Reset counter on successful connection
+                });
+
+                es.addEventListener("newHistorySchudule", (event: MessageEvent) => {
+                    try {
+                        const item = JSON.parse(event.data);
+                        if (!item) return;
+
+                        // Chỉ tăng badge nếu không đang ở trang ScheduleApproval
+                        if (location.pathname !== "/ScheduleApproval") {
+                            setPendingApprovalCount((prev) => prev + 1);
+                        }
+                    } catch (err) {
+                        console.error("❌ Error handling newHistorySchudule event in Sidebar", err);
+                    }
+                });
+
+                es.addEventListener("deleteHistorySchudule", () => {
+                    try {
+                        // Khi có yêu cầu bị xóa (đã duyệt/từ chối), không cần giảm badge
+                        // vì badge chỉ đếm số yêu cầu mới đến
+                    } catch (err) {
+                        console.error("❌ Error handling deleteHistorySchudule event in Sidebar", err);
+                    }
+                });
+
+                es.onerror = (err: any) => {
+                    const errorStatus = err?.status || err?.target?.status;
+
+                    if (errorStatus === 401) {
+                        console.warn("⚠️ SSE 401 Unauthorized in Sidebar - Token may be expired");
+                        // Không reconnect nếu là lỗi 401, có thể token đã hết hạn
+                        if (es) {
+                            es.close();
+                            es = null;
+                        }
+                    } else {
+                        // Các lỗi khác (network, timeout) thì thử reconnect
+                        if (reconnectAttempts < maxReconnectAttempts) {
+                            reconnectAttempts++;
+                            console.warn(`⚠️ SSE error in Sidebar (attempt ${reconnectAttempts}/${maxReconnectAttempts}, will retry in ${reconnectDelay}ms):`, err);
+
+                            if (es) {
+                                es.close();
+                                es = null;
+                            }
+
+                            reconnectTimeout = setTimeout(() => {
+                                connectSSE();
+                            }, reconnectDelay);
+                        } else {
+                            console.error("❌ Max reconnect attempts reached for Sidebar SSE");
+                            if (es) {
+                                es.close();
+                                es = null;
+                            }
+                        }
+                    }
+                };
+            } catch (error) {
+                console.error("❌ Error creating SSE connection in Sidebar:", error);
+            }
         };
 
+        // Kết nối lần đầu
+        connectSSE();
+
         return () => {
-            es.close();
+            if (reconnectTimeout) {
+                clearTimeout(reconnectTimeout);
+            }
+            if (es) {
+                es.close();
+            }
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [hasPermission, location.pathname]);
@@ -245,6 +306,12 @@ const SidebarLeft: React.FC = () => {
                     <NavLink to="/ScheduleManagement" className={navItemClass}>
                         <Calendar className="w-5 h-5" />
                         {!collapsed && <span>Quản lý ca đăng ký lịch làm việc</span>}
+                    </NavLink>
+                )}
+                {hasPermission && (
+                    <NavLink to="/ScheduleManagement/CreateShiftTypeSupplier" className={navItemClass}>
+                        <span className="material-symbols-outlined text-[20px]">add_circle</span>
+                        {!collapsed && <span>Tạo thời gian đăng ký loại ca</span>}
                     </NavLink>
                 )}
                 {hasPermission && (

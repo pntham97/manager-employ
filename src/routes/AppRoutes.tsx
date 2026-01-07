@@ -11,6 +11,7 @@ import ManagerEmploy from "../pages/ManagerEmploy";
 import EmployDetail from "../pages/EmployDetail";
 import ScheduleApproval from "../pages/ScheduleApproval";
 import ScheduleManagement from "../pages/ScheduleManagement";
+import CreateShiftTypeSupplier from "../pages/CreateShiftTypeSupplier";
 import AddEmploys from "../pages/AddEmploys";
 import PrivateRoute from "../pages/PrivateRoute";
 
@@ -32,6 +33,7 @@ const AppRoutes = () => {
                         <Route path="/Calendar" element={<Calendar />} />
                         <Route path="/ScheduleApproval" element={<ScheduleApproval />} />
                         <Route path="/ScheduleManagement" element={<ScheduleManagement />} />
+                        <Route path="/ScheduleManagement/CreateShiftTypeSupplier" element={<CreateShiftTypeSupplier />} />
                         <Route path="/ManagerEmploy" element={<ManagerEmploy />} />
                         <Route path="/ManagerEmploy/AddEmploys" element={<AddEmploys />} />
                         <Route path="/EmployDetail" element={<EmployDetail />} />

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { scheduleApi } from "../api/schedule.api";
 import { shiftTypeSupplierApi } from "../api/shiftTypeSupplier.api";
 import { employeeApi } from "../api/employee.api";
@@ -24,7 +25,7 @@ const ScheduleManagement = () => {
         detailShiftTypeName: string;
         startAt: string;
         endAt: string;
-        employees: Array<{ name: string; phone?: string; positionId?: number }>;
+        employees: Array<{ name: string; phone?: string; positionId?: number; roleName?: string }>;
     }>({
         show: false,
         day: 0,
@@ -36,6 +37,55 @@ const ScheduleManagement = () => {
 
     const currentMonth = currentDate.getMonth(); // 0-11
     const currentYear = currentDate.getFullYear();
+    const navigate = useNavigate();
+
+    // Chuẩn hoá registrationDate về dạng Date chỉ có ngày, tránh lệch 1 ngày do timezone
+    const toRegistrationDateOnly = (value: string | undefined | null) => {
+        if (!value) return null;
+
+        // Nếu backend trả về dạng "YYYY-MM-DD" (không có giờ) thì tự parse thủ công
+        if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+            const [y, m, d] = value.split("-").map(Number);
+            if (!y || !m || !d) return null;
+            return new Date(y, m - 1, d);
+        }
+
+        // Các trường hợp còn lại (có 'T' / full ISO) dùng Date rồi bỏ phần giờ
+        const d = new Date(value);
+        if (Number.isNaN(d.getTime())) return null;
+        return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    };
+
+    // Chuẩn hoá bất kỳ date string để so sánh start/end của shiftType
+    const toDateOnly = (value: string | Date | undefined | null) => {
+        if (!value) return null;
+        const d = new Date(value);
+        if (Number.isNaN(d.getTime())) return null;
+        return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    };
+
+    // Kiểm tra shiftType (hoặc record) có hiệu lực cho ngày target hay không (dựa vào start/end date)
+    const isShiftTypeActiveOnDate = (item: any, target: Date) => {
+        const start = toDateOnly(
+            item?.start_day ??
+            item?.startDay ??
+            item?.startDate ??
+            item?.shiftType?.start_day ??
+            item?.shiftType?.startDay ??
+            item?.shiftType?.startDate
+        );
+        const end = toDateOnly(
+            item?.end_day ??
+            item?.endDay ??
+            item?.endDate ??
+            item?.shiftType?.end_day ??
+            item?.shiftType?.endDay ??
+            item?.shiftType?.endDate
+        );
+        if (!start || !end) return true; // không có range thì coi như áp dụng
+        const t = new Date(target.getFullYear(), target.getMonth(), target.getDate());
+        return t >= start && t <= end;
+    };
 
     // Kiểm tra quyền ADMIN hoặc MANAGER
     const checkPermission = () => {
@@ -85,6 +135,7 @@ const ScheduleManagement = () => {
 
             const res = await scheduleApi.getAdminManagerSchedule(month, year, supplierIdForApi);
             const payload = Array.isArray(res.data) ? res.data : res.data?.data;
+            console.log(payload);
             setScheduleData(payload ?? []);
         } catch (error: any) {
             console.error("Failed to load schedule data", error);
@@ -215,14 +266,13 @@ const ScheduleManagement = () => {
     const monthLabel = `Tháng ${currentMonth + 1}`;
 
     // Hàm lấy danh sách nhân viên đã đăng ký một ca cụ thể
-    const getEmployeesForShift = (day: number, detailShiftTypeId: number): Array<{ name: string; phone?: string; positionId?: number }> => {
+    const getEmployeesForShift = (day: number, detailShiftTypeId: number): Array<{ name: string; phone?: string; positionId?: number; roleName?: string }> => {
         if (!Array.isArray(scheduleData)) return [];
 
         const daySchedules = scheduleData.filter((s: any) => {
             const regDate = s?.registrationDate;
-            if (!regDate) return false;
-            const d = new Date(regDate);
-            if (isNaN(d.getTime())) return false;
+            const d = toRegistrationDateOnly(regDate);
+            if (!d) return false;
             const isSameDay =
                 d.getFullYear() === currentYear &&
                 d.getMonth() === currentMonth &&
@@ -244,13 +294,24 @@ const ScheduleManagement = () => {
             .map((s: any) => {
                 const employee = s?.employee;
                 if (!employee) return null;
+
+                // Lấy roleName ưu tiên từ field roleName backend, sau đó tới role.name/role
+                const rawRoleName =
+                    employee?.roleName ??
+                    employee?.role?.name ??
+                    employee?.role ??
+                    "";
+
+                const roleName = rawRoleName ? String(rawRoleName).toUpperCase() : "";
+
                 return {
                     name: employee?.name || "Chưa có tên",
                     phone: employee?.phone,
                     positionId: employee?.positionId,
+                    roleName,
                 };
             })
-            .filter((emp: any) => emp !== null) as Array<{ name: string; phone?: string; positionId?: number }>;
+            .filter((emp: any) => emp !== null) as Array<{ name: string; phone?: string; positionId?: number; roleName?: string }>;
     };
 
     // Hàm xử lý click vào ca để hiển thị danh sách nhân viên
@@ -278,6 +339,9 @@ const ScheduleManagement = () => {
         employeeName?: string;
         employeeCount?: number; // Số lượng người đăng ký ca này
         employeeNames?: string[]; // Danh sách tên người đăng ký
+        managerCount?: number;
+        userCount?: number;
+        otherCount?: number;
         startAt?: string;
         endAt?: string;
         isDetail?: boolean; // true nếu là chi tiết từng ca, false nếu là tổng hợp
@@ -287,9 +351,8 @@ const ScheduleManagement = () => {
         // Lọc schedule theo ngày và shiftType (nếu có filter)
         const daySchedules = scheduleData.filter((s: any) => {
             const regDate = s?.registrationDate;
-            if (!regDate) return false;
-            const d = new Date(regDate);
-            if (isNaN(d.getTime())) return false;
+            const d = toRegistrationDateOnly(regDate);
+            if (!d) return false;
             const isSameDay =
                 d.getFullYear() === currentYear &&
                 d.getMonth() === currentMonth &&
@@ -313,6 +376,9 @@ const ScheduleManagement = () => {
                 endAt: string;
                 employeeCount: number;
                 employeeNames: string[];
+                managerCount: number;
+                userCount: number;
+                otherCount: number;
             }>();
 
             daySchedules.forEach((s: any) => {
@@ -330,6 +396,9 @@ const ScheduleManagement = () => {
                         endAt: detailShiftType?.endAt || "",
                         employeeCount: 0,
                         employeeNames: [],
+                        managerCount: 0,
+                        userCount: 0,
+                        otherCount: 0,
                     });
                 }
 
@@ -337,6 +406,16 @@ const ScheduleManagement = () => {
                 item.employeeCount += 1;
                 if (employee?.name) {
                     item.employeeNames.push(employee.name);
+                }
+
+                // Ưu tiên đếm USER/MANAGER; còn lại cũng gom vào USER để không bị 0
+                const roleName = (employee?.role?.name || employee?.role || "").toString().toUpperCase();
+                if (roleName === "MANAGER") {
+                    item.managerCount += 1;
+                } else if (roleName === "USER") {
+                    item.userCount += 1;
+                } else {
+                    item.userCount += 1;
                 }
             });
 
@@ -348,6 +427,9 @@ const ScheduleManagement = () => {
                 endAt: string;
                 employeeCount: number;
                 employeeNames: string[];
+                managerCount: number;
+                userCount: number;
+                otherCount: number;
                 isDetail: boolean;
             }> = Array.from(detailShiftTypeMap.entries()).map(([detailShiftTypeId, item]) => ({
                 ...item,
@@ -655,60 +737,112 @@ const ScheduleManagement = () => {
                                                 </span>
                                             )}
 
-                                            {cell.isCurrentMonth && typeof cell.label === "number" && scheduleInfo.length > 0 && (
-                                                <div className="mt-1 flex flex-col gap-1 max-h-[90px] overflow-y-auto">
-                                                    {scheduleInfo.map((info, idx) => {
-                                                        // Nếu đã chọn shiftType: hiển thị chi tiết từng ca với số lượng người đăng ký
-                                                        if (info.isDetail && info.detailShiftTypeId) {
-                                                            const employeeCount = info.employeeCount || 0;
-                                                            const employeeNames = info.employeeNames || [];
-                                                            const tooltipText = employeeNames.length > 0
-                                                                ? `${info.detailShiftTypeName} (${info.startAt} - ${info.endAt})\nSố người: ${employeeCount}\nDanh sách: ${employeeNames.join(", ")}\n\nClick để xem chi tiết`
-                                                                : `${info.detailShiftTypeName} (${info.startAt} - ${info.endAt})\nSố người: ${employeeCount}\n\nClick để xem chi tiết`;
+                                            {cell.isCurrentMonth && typeof cell.label === "number" && (
+                                                (() => {
+                                                    const targetDate = new Date(currentYear, currentMonth, cell.label as number);
+                                                    const hasActiveShiftType = shiftTypeData.some((st: any) =>
+                                                        isShiftTypeActiveOnDate(st, targetDate)
+                                                    );
 
-                                                            return (
-                                                                <div
-                                                                    key={idx}
-                                                                    onClick={() => handleShiftClick(
-                                                                        cell.label as number,
-                                                                        info.detailShiftTypeName || "",
-                                                                        info.startAt || "",
-                                                                        info.endAt || "",
-                                                                        info.detailShiftTypeId!
-                                                                    )}
-                                                                    className="text-[9px] px-1.5 py-1 rounded bg-blue-50 text-blue-700 border border-blue-300 dark:bg-blue-900/30 dark:text-blue-200 dark:border-blue-700 cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
-                                                                    title={tooltipText}
-                                                                >
-                                                                    <div className="flex items-center justify-between gap-1">
-                                                                        <div className="font-semibold truncate flex-1">{info.detailShiftTypeName}</div>
-                                                                        {employeeCount > 0 && (
-                                                                            <div className="text-[8px] font-bold text-blue-800 dark:text-blue-300 bg-blue-200 dark:bg-blue-800 px-1.5 py-0.5 rounded whitespace-nowrap">
-                                                                                {employeeCount} người
-                                                                            </div>
-                                                                        )}
-                                                                    </div>
-                                                                    {info.startAt && info.endAt && (
-                                                                        <div className="text-[8px] text-blue-600 dark:text-blue-300 mt-0.5">
-                                                                            {info.startAt} - {info.endAt}
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                            );
-                                                        }
-
-                                                        // Nếu không chọn shiftType: hiển thị tổng hợp như cũ
+                                                    if (scheduleInfo.length > 0) {
                                                         return (
-                                                            <div
-                                                                key={idx}
-                                                                className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-300 dark:bg-blue-900/30 dark:text-blue-200 dark:border-blue-700 text-center"
-                                                                title={`${info.shiftTypeName}: ${info.detailCount} ca chi tiết`}
-                                                            >
-                                                                <span className="font-semibold">{info.shiftTypeName}</span>
-                                                                <span className="text-[9px]">: {info.detailCount} ca</span>
+                                                            <div className="mt-1 flex flex-col gap-1 max-h-[90px] overflow-y-auto">
+                                                                {scheduleInfo.map((info, idx) => {
+                                                                    // Nếu đã chọn shiftType: hiển thị chi tiết từng ca với số lượng người đăng ký
+                                                                    if (info.isDetail && info.detailShiftTypeId) {
+                                                                        const employeeCount = info.employeeCount || 0;
+                                                                        const employeeNames = info.employeeNames || [];
+                                                                        let managerCount = info.managerCount || 0;
+                                                                        let userCount = info.userCount || 0;
+                                                                        const otherCount = info.otherCount || 0;
+                                                                        // Nếu cả USER và MANAGER đều 0 nhưng có người, gán toàn bộ vào USER
+                                                                        if (employeeCount > 0 && managerCount === 0 && userCount === 0) {
+                                                                            userCount = employeeCount;
+                                                                        }
+                                                                        const roleSummary = [
+                                                                            managerCount ? `MANAGER: ${managerCount}` : "",
+                                                                            userCount ? `USER: ${userCount}` : "",
+                                                                            otherCount ? `OTHER: ${otherCount}` : "",
+                                                                        ].filter(Boolean).join("\n");
+                                                                        const tooltipText = employeeNames.length > 0
+                                                                            ? `${info.detailShiftTypeName} (${info.startAt} - ${info.endAt})\nTổng: ${employeeCount}\n${roleSummary ? `${roleSummary}\n` : ""}Danh sách: ${employeeNames.join(", ")}\n\nClick để xem chi tiết`
+                                                                            : `${info.detailShiftTypeName} (${info.startAt} - ${info.endAt})\nTổng: ${employeeCount}\n${roleSummary ? `${roleSummary}\n` : ""}\nClick để xem chi tiết`;
+
+                                                                        return (
+                                                                            <div
+                                                                                key={idx}
+                                                                                onClick={() => handleShiftClick(
+                                                                                    cell.label as number,
+                                                                                    info.detailShiftTypeName || "",
+                                                                                    info.startAt || "",
+                                                                                    info.endAt || "",
+                                                                                    info.detailShiftTypeId!
+                                                                                )}
+                                                                                className="text-[9px] px-1.5 py-1 rounded bg-blue-50 text-blue-700 border border-blue-300 dark:bg-blue-900/30 dark:text-blue-200 dark:border-blue-700 cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
+                                                                                title={tooltipText}
+                                                                            >
+                                                                                <div className="flex items-center justify-between gap-1">
+                                                                                    <div className="font-semibold truncate flex-1">{info.detailShiftTypeName}</div>
+                                                                                    {employeeCount > 0 && (
+                                                                                        <div className="flex items-center gap-1 whitespace-nowrap">
+                                                                                            <span className="text-[8px] font-semibold text-blue-800 dark:text-blue-200 bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 rounded">
+                                                                                                USER: {userCount}
+                                                                                            </span>
+                                                                                            <span className="text-[8px] font-semibold text-blue-800 dark:text-blue-200 bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 rounded">
+                                                                                                MANAGER: {managerCount}
+                                                                                            </span>
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+                                                                                {info.startAt && info.endAt && (
+                                                                                    <div className="text-[8px] text-blue-600 dark:text-blue-300 mt-0.5">
+                                                                                        {info.startAt} - {info.endAt}
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        );
+                                                                    }
+
+                                                                    // Nếu không chọn shiftType: hiển thị tổng hợp như cũ
+                                                                    return (
+                                                                        <div
+                                                                            key={idx}
+                                                                            className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-300 dark:bg-blue-900/30 dark:text-blue-200 dark:border-blue-700 text-center"
+                                                                            title={`${info.shiftTypeName}: ${info.detailCount} ca chi tiết`}
+                                                                        >
+                                                                            <span className="font-semibold">{info.shiftTypeName}</span>
+                                                                            <span className="text-[9px]">: {info.detailCount} ca</span>
+                                                                        </div>
+                                                                    );
+                                                                })}
                                                             </div>
                                                         );
-                                                    })}
-                                                </div>
+                                                    }
+
+                                                    // Không có scheduleInfo
+                                                    if (!hasActiveShiftType) {
+                                                        const startDatePrefill = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-${String(cell.label).padStart(2, "0")}`;
+                                                        return (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => navigate(`/ScheduleManagement/CreateShiftTypeSupplier?startDate=${startDatePrefill}`)}
+                                                                className="mt-2 inline-flex items-center gap-1 rounded-full border border-blue-200 dark:border-blue-700 bg-blue-50/60 dark:bg-blue-900/30 px-2.5 py-1 text-[11px] font-medium text-blue-700 dark:text-blue-200 hover:bg-blue-100 dark:hover:bg-blue-900/60 transition-colors"
+                                                            >
+                                                                <span className="material-symbols-outlined text-[14px]">
+                                                                    add_circle
+                                                                </span>
+                                                                <span>Chưa đăng ký loại ca · Bấm để bổ sung</span>
+                                                            </button>
+                                                        );
+                                                    }
+
+                                                    // Có loại ca hiệu lực nhưng chưa có đăng ký
+                                                    return (
+                                                        <div className="mt-2 text-[11px] text-slate-400 dark:text-slate-500 italic">
+                                                            Chưa có người đăng ký ca
+                                                        </div>
+                                                    );
+                                                })()
                                             )}
                                         </div>
                                     )}
@@ -770,12 +904,27 @@ const ScheduleManagement = () => {
                                     {employeeListModal.startAt} - {employeeListModal.endAt}
                                 </span>
                             </div>
-                            <div className="flex items-center gap-2">
-                                <span className="material-symbols-outlined text-blue-600 dark:text-blue-400 text-sm">person</span>
-                                <span className="text-sm text-[#111318] dark:text-white">
-                                    Tổng số: {employeeListModal.employees.length} người
-                                </span>
-                            </div>
+                            {(() => {
+                                const userCount = employeeListModal.employees.filter(e => (e.roleName || "").toUpperCase() === "USER").length;
+                                const managerCount = employeeListModal.employees.filter(e => (e.roleName || "").toUpperCase() === "MANAGER").length;
+                                const total = employeeListModal.employees.length;
+                                return (
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <div className="flex items-center gap-2">
+                                            <span className="material-symbols-outlined text-blue-600 dark:text-blue-400 text-sm">person</span>
+                                            <span className="text-sm text-[#111318] dark:text-white">
+                                                Tổng số: {total} người
+                                            </span>
+                                        </div>
+                                        <span className="text-[11px] font-semibold text-blue-800 dark:text-blue-200 bg-blue-100 dark:bg-blue-900/40 px-2 py-0.5 rounded-full">
+                                            USER: {userCount}
+                                        </span>
+                                        <span className="text-[11px] font-semibold text-blue-800 dark:text-blue-200 bg-blue-100 dark:bg-blue-900/40 px-2 py-0.5 rounded-full">
+                                            MANAGER: {managerCount}
+                                        </span>
+                                    </div>
+                                );
+                            })()}
                         </div>
                         <div className="border border-[#dbdfe6] dark:border-[#4b5563] rounded-lg max-h-[400px] overflow-y-auto">
                             {employeeListModal.employees.length > 0 ? (
@@ -787,7 +936,16 @@ const ScheduleManagement = () => {
                                                     <span className="material-symbols-outlined text-blue-600 dark:text-blue-400 text-sm">person</span>
                                                 </div>
                                                 <div className="flex-1">
-                                                    <div className="font-medium text-[#111318] dark:text-white">{employee.name}</div>
+                                                    <div className="flex items-center justify-between gap-2">
+                                                        <div className="font-medium text-[#111318] dark:text-white">
+                                                            {employee.name}
+                                                        </div>
+                                                        {employee.roleName && (
+                                                            <span className="inline-flex items-center rounded-full bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 text-[11px] font-semibold text-blue-700 dark:text-blue-200">
+                                                                {employee.roleName}
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                     {employee.phone && (
                                                         <div className="text-xs text-[#616f89] dark:text-[#9ca3af] mt-0.5">
                                                             {employee.phone}

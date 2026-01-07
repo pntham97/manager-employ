@@ -387,9 +387,9 @@ const EmployDetail = () => {
                             }}
                             className="flex items-center justify-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-bold text-black hover:text-white hover:bg-blue-700 transition-colors shadow-sm shadow-blue-500/20"
                         >
-                            <span className="material-symbols-outlined text-[20px]">edit</span>
-                            <span>Chỉnh sửa hồ sơ</span>
-                        </button>
+                        <span className="material-symbols-outlined text-[20px]">edit</span>
+                        <span>Chỉnh sửa hồ sơ</span>
+                    </button>
                     ) : (
                         <button
                             onClick={() => {
@@ -496,8 +496,8 @@ const EmployDetail = () => {
                                 {employee?.managers && employee.managers.length > 0 ? (
                                     employee.managers.map((manager) => (
                                         <div key={manager.employeeId} className="flex items-center gap-2">
-                                            <div
-                                                className="h-6 w-6 rounded-full bg-cover bg-center"
+                                <div
+                                    className="h-6 w-6 rounded-full bg-cover bg-center"
                                                 style={{
                                                     backgroundImage: `url(${manager?.avatarUrl
                                                         ? manager.avatarUrl
@@ -835,86 +835,86 @@ const EmployDetail = () => {
             ) : (
                 <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
                     <div className="space-y-6 lg:col-span-2">
-                        <div className="rounded-xl bg-surface-light dark:bg-surface-dark p-6 shadow-sm border border-border-light dark:border-border-dark">
-                            <div className="flex items-center justify-between mb-6">
-                                <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                                    <span className="material-symbols-outlined text-primary">person</span>
-                                    Thông tin cá nhân
-                                </h3>
-                            </div>
-                            <dl className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
-                                <div>
-                                    <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Họ và tên</dt>
+                    <div className="rounded-xl bg-surface-light dark:bg-surface-dark p-6 shadow-sm border border-border-light dark:border-border-dark">
+                        <div className="flex items-center justify-between mb-6">
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                <span className="material-symbols-outlined text-primary">person</span>
+                                Thông tin cá nhân
+                            </h3>
+                        </div>
+                        <dl className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
+                            <div>
+                                <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Họ và tên</dt>
                                     <dd className="mt-1 text-sm font-semibold text-gray-900 dark:text-white">{employee?.name}</dd>
-                                </div>
-                                <div>
-                                    <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Giới tính</dt>
+                            </div>
+                            <div>
+                                <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Giới tính</dt>
                                     <dd className="mt-1 text-sm font-semibold text-gray-900 dark:text-white">{employee?.gender ? "Nam" : "Nữ"}</dd>
-                                </div>
-                                <div>
-                                    <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Ngày sinh</dt>
+                            </div>
+                            <div>
+                                <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Ngày sinh</dt>
                                     <dd className="mt-1 text-sm font-semibold text-gray-900 dark:text-white">{formatDate(employee?.dateOfBirth)}</dd>
-                                </div>
-                                <div>
-                                    <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Quốc tịch</dt>
+                            </div>
+                            <div>
+                                <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Quốc tịch</dt>
                                     <dd className="mt-1 text-sm font-semibold text-gray-900 dark:text-white">{employee?.nationality}</dd>
-                                </div>
-                                <div>
-                                    <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">CCCD/CMND</dt>
+                            </div>
+                            <div>
+                                <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">CCCD/CMND</dt>
                                     <dd className="mt-1 text-sm font-semibold text-gray-900 dark:text-white">{employee?.identityNumber}</dd>
-                                </div>
-                                <div>
-                                    <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Mã số thuế</dt>
+                            </div>
+                            <div>
+                                <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Mã số thuế</dt>
                                     <dd className="mt-1 text-sm font-semibold text-gray-900 dark:text-white">{employee?.taxCode}</dd>
-                                </div>
-                                <div className="sm:col-span-2">
-                                    <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Địa chỉ thường trú</dt>
+                            </div>
+                            <div className="sm:col-span-2">
+                                <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Địa chỉ thường trú</dt>
                                     <dd className="mt-1 text-sm font-semibold text-gray-900 dark:text-white">{employee?.address}</dd>
-                                </div>
-                            </dl>
-                        </div>
-
-                        <div className="rounded-xl bg-surface-light dark:bg-surface-dark p-6 shadow-sm border border-border-light dark:border-border-dark">
-                            <div className="flex items-center justify-between mb-6">
-                                <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                                    <span className="material-symbols-outlined text-primary">contact_phone</span>
-                                    Thông tin liên hệ
-                                </h3>
                             </div>
-                            <dl className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
-                                <div>
-                                    <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Email công việc</dt>
+                        </dl>
+                    </div>
+
+                    <div className="rounded-xl bg-surface-light dark:bg-surface-dark p-6 shadow-sm border border-border-light dark:border-border-dark">
+                        <div className="flex items-center justify-between mb-6">
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                <span className="material-symbols-outlined text-primary">contact_phone</span>
+                                Thông tin liên hệ
+                            </h3>
+                        </div>
+                        <dl className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
+                            <div>
+                                <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Email công việc</dt>
                                     <dd className="mt-1 text-sm font-semibold text-primary">{employee?.workEmail}</dd>
-                                </div>
-                                <div>
-                                    <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Email cá nhân</dt>
-                                    <dd className="mt-1 text-sm font-semibold text-gray-900 dark:text-white">{employee?.email}</dd>
-                                </div>
-                                <div>
-                                    <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Số điện thoại</dt>
-                                    <dd className="mt-1 text-sm font-semibold text-gray-900 dark:text-white">{employee?.phone}</dd>
-                                </div>
-                                <div>
-                                    <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Liên hệ khẩn cấp</dt>
-                                    <dd className="mt-1 text-sm font-semibold text-gray-900 dark:text-white">{employee?.emergencyContactName} - {formatPhoneNumber(employee?.emergencyContactPhone)}</dd>
-                                </div>
-                            </dl>
-                        </div>
-
-                        <div className="rounded-xl bg-surface-light dark:bg-surface-dark p-6 shadow-sm border border-border-light dark:border-border-dark">
-                            <div className="flex items-center justify-between mb-6">
-                                <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                                    <span className="material-symbols-outlined text-primary">account_balance</span>
-                                    Thông tin ngân hàng
-                                </h3>
                             </div>
-                            <dl className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
-                                <div>
-                                    <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Ngân hàng</dt>
+                            <div>
+                                <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Email cá nhân</dt>
+                                    <dd className="mt-1 text-sm font-semibold text-gray-900 dark:text-white">{employee?.email}</dd>
+                            </div>
+                            <div>
+                                <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Số điện thoại</dt>
+                                    <dd className="mt-1 text-sm font-semibold text-gray-900 dark:text-white">{employee?.phone}</dd>
+                            </div>
+                            <div>
+                                <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Liên hệ khẩn cấp</dt>
+                                    <dd className="mt-1 text-sm font-semibold text-gray-900 dark:text-white">{employee?.emergencyContactName} - {formatPhoneNumber(employee?.emergencyContactPhone)}</dd>
+                            </div>
+                        </dl>
+                    </div>
+
+                    <div className="rounded-xl bg-surface-light dark:bg-surface-dark p-6 shadow-sm border border-border-light dark:border-border-dark">
+                        <div className="flex items-center justify-between mb-6">
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                <span className="material-symbols-outlined text-primary">account_balance</span>
+                                Thông tin ngân hàng
+                            </h3>
+                        </div>
+                        <dl className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
+                            <div>
+                                <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Ngân hàng</dt>
                                     <dd className="mt-1 text-sm font-semibold text-gray-900 dark:text-white">{employee?.bankName}</dd>
-                                </div>
-                                <div>
-                                    <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Số tài khoản</dt>
+                            </div>
+                            <div>
+                                <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Số tài khoản</dt>
                                     <dd className="mt-1 flex items-center gap-2">
                                         <span className="text-sm font-semibold text-gray-900 dark:text-white font-mono">
                                             {formatBankAccount(employee?.bankAccountNumber)}
@@ -929,96 +929,96 @@ const EmployDetail = () => {
                                             </span>
                                         </button>
                                     </dd>
-                                </div>
-                                <div>
-                                    <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Tên chủ tài khoản</dt>
+                            </div>
+                            <div>
+                                <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Tên chủ tài khoản</dt>
                                     <dd className="mt-1 text-sm font-semibold text-gray-900 dark:text-white">{employee?.bankAccountHolderName}</dd>
-                                </div>
-                            </dl>
+                            </div>
+                        </dl>
+                    </div>
+                </div>
+
+                <div className="space-y-6 lg:col-span-1">
+                    <div className="rounded-xl bg-surface-light dark:bg-surface-dark p-6 shadow-sm border border-border-light dark:border-border-dark">
+                        <h3 className="mb-4 text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                            <span className="material-symbols-outlined text-primary">work</span>
+                            Thông tin công việc
+                        </h3>
+                        <div className="space-y-4">
+                            <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-3">
+                                <span className="text-sm text-gray-500 dark:text-gray-400">Loại hình</span>
+                                    <span className="text-sm font-semibold text-gray-900 dark:text-white">{employee?.typeWork?.name}</span>
+                            </div>
+                            <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-3">
+                                <span className="text-sm text-gray-500 dark:text-gray-400">Ngày chính thức</span>
+                                    <span className="text-sm font-semibold text-gray-900 dark:text-white">{formatDate(employee?.joinDate)}</span>
+                            </div>
+                            <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-3">
+                                <span className="text-sm text-gray-500 dark:text-gray-400">Thâm niên</span>
+                                    <span className="text-sm font-semibold text-gray-900 dark:text-white">{calculateTenure(employee?.joinDate)}</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <span className="text-sm text-gray-500 dark:text-gray-400">Văn phòng</span>
+                                    <span className="text-sm font-semibold text-gray-900 dark:text-white">{employee?.supplier?.name}</span>
+                            </div>
                         </div>
                     </div>
 
-                    <div className="space-y-6 lg:col-span-1">
-                        <div className="rounded-xl bg-surface-light dark:bg-surface-dark p-6 shadow-sm border border-border-light dark:border-border-dark">
-                            <h3 className="mb-4 text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                                <span className="material-symbols-outlined text-primary">work</span>
-                                Thông tin công việc
-                            </h3>
-                            <div className="space-y-4">
-                                <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-3">
-                                    <span className="text-sm text-gray-500 dark:text-gray-400">Loại hình</span>
-                                    <span className="text-sm font-semibold text-gray-900 dark:text-white">{employee?.typeWork?.name}</span>
+                    <div className="rounded-xl bg-surface-light dark:bg-surface-dark p-6 shadow-sm border border-border-light dark:border-border-dark">
+                        <h3 className="mb-4 text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                            <span className="material-symbols-outlined text-primary">description</span>
+                            Hợp đồng hiện tại
+                        </h3>
+                        <div className="rounded-lg bg-gray-50 dark:bg-gray-800 p-4">
+                            <div className="flex items-center gap-3 mb-2">
+                                <div className="bg-red-100 text-red-600 p-2 rounded-lg">
+                                    <span className="material-symbols-outlined text-[20px]">picture_as_pdf</span>
                                 </div>
-                                <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-3">
-                                    <span className="text-sm text-gray-500 dark:text-gray-400">Ngày chính thức</span>
-                                    <span className="text-sm font-semibold text-gray-900 dark:text-white">{formatDate(employee?.joinDate)}</span>
+                                <div className="flex-1 overflow-hidden">
+                                    <p className="truncate text-sm font-bold text-gray-900 dark:text-white">HDLD-2023-056.pdf</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">Hợp đồng lao động không xác định thời hạn</p>
                                 </div>
-                                <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-3">
-                                    <span className="text-sm text-gray-500 dark:text-gray-400">Thâm niên</span>
-                                    <span className="text-sm font-semibold text-gray-900 dark:text-white">{calculateTenure(employee?.joinDate)}</span>
-                                </div>
-                                <div className="flex items-center justify-between">
-                                    <span className="text-sm text-gray-500 dark:text-gray-400">Văn phòng</span>
-                                    <span className="text-sm font-semibold text-gray-900 dark:text-white">{employee?.supplier?.name}</span>
-                                </div>
+                            </div>
+                            <div className="flex justify-between items-center text-xs mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                                <span className="text-green-600 font-medium">Đã ký ngày 12/07/2023</span>
+                                <a className="text-primary hover:underline" href="#">Tải về</a>
                             </div>
                         </div>
+                    </div>
 
-                        <div className="rounded-xl bg-surface-light dark:bg-surface-dark p-6 shadow-sm border border-border-light dark:border-border-dark">
-                            <h3 className="mb-4 text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                                <span className="material-symbols-outlined text-primary">description</span>
-                                Hợp đồng hiện tại
+                    <div className="rounded-xl bg-surface-light dark:bg-surface-dark p-6 shadow-sm border border-border-light dark:border-border-dark">
+                        <div className="flex items-center justify-between mb-6">
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                <span className="material-symbols-outlined text-primary">history</span>
+                                Lịch sử
                             </h3>
-                            <div className="rounded-lg bg-gray-50 dark:bg-gray-800 p-4">
-                                <div className="flex items-center gap-3 mb-2">
-                                    <div className="bg-red-100 text-red-600 p-2 rounded-lg">
-                                        <span className="material-symbols-outlined text-[20px]">picture_as_pdf</span>
-                                    </div>
-                                    <div className="flex-1 overflow-hidden">
-                                        <p className="truncate text-sm font-bold text-gray-900 dark:text-white">HDLD-2023-056.pdf</p>
-                                        <p className="text-xs text-gray-500 dark:text-gray-400">Hợp đồng lao động không xác định thời hạn</p>
-                                    </div>
-                                </div>
-                                <div className="flex justify-between items-center text-xs mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-                                    <span className="text-green-600 font-medium">Đã ký ngày 12/07/2023</span>
-                                    <a className="text-primary hover:underline" href="#">Tải về</a>
-                                </div>
-                            </div>
+                            <a className="text-xs font-medium text-primary hover:underline" href="#">Xem tất cả</a>
                         </div>
+                        <div className="relative border-l-2 border-gray-100 dark:border-gray-800 ml-3 space-y-8">
 
-                        <div className="rounded-xl bg-surface-light dark:bg-surface-dark p-6 shadow-sm border border-border-light dark:border-border-dark">
-                            <div className="flex items-center justify-between mb-6">
-                                <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                                    <span className="material-symbols-outlined text-primary">history</span>
-                                    Lịch sử
-                                </h3>
-                                <a className="text-xs font-medium text-primary hover:underline" href="#">Xem tất cả</a>
-                            </div>
-                            <div className="relative border-l-2 border-gray-100 dark:border-gray-800 ml-3 space-y-8">
-
-                                <div className="relative ml-6">
+                            <div className="relative ml-6">
                                     <span className="absolute -left-[33px] top-1.5 h-4 w-4 rounded-full border-2 border-white bg-blue-500 dark:border-gray-900"></span>
-                                    <h4 className="text-sm font-bold text-gray-900 dark:text-white">Thăng chức Senior Engineer</h4>
-                                    <p className="text-xs text-gray-500 mt-1">01/01/2023</p>
-                                    <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">Được bổ nhiệm vị trí mới sau đánh giá hiệu suất năm 2022.</p>
-                                </div>
+                                <h4 className="text-sm font-bold text-gray-900 dark:text-white">Thăng chức Senior Engineer</h4>
+                                <p className="text-xs text-gray-500 mt-1">01/01/2023</p>
+                                <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">Được bổ nhiệm vị trí mới sau đánh giá hiệu suất năm 2022.</p>
+                            </div>
 
-                                <div className="relative ml-6">
+                            <div className="relative ml-6">
                                     <span className="absolute -left-[33px] top-1.5 h-4 w-4 rounded-full border-2 border-white bg-gray-300 dark:border-gray-900 dark:bg-gray-600"></span>
-                                    <h4 className="text-sm font-bold text-gray-900 dark:text-white">Ký hợp đồng chính thức</h4>
-                                    <p className="text-xs text-gray-500 mt-1">12/07/2021</p>
-                                </div>
+                                <h4 className="text-sm font-bold text-gray-900 dark:text-white">Ký hợp đồng chính thức</h4>
+                                <p className="text-xs text-gray-500 mt-1">12/07/2021</p>
+                            </div>
 
-                                <div className="relative ml-6">
+                            <div className="relative ml-6">
                                     <span className="absolute -left-[33px] top-1.5 h-4 w-4 rounded-full border-2 border-white bg-gray-300 dark:border-gray-900 dark:bg-gray-600"></span>
-                                    <h4 className="text-sm font-bold text-gray-900 dark:text-white">Gia nhập công ty</h4>
-                                    <p className="text-xs text-gray-500 mt-1">12/05/2021</p>
-                                    <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">Vị trí: Software Engineer (Thử việc)</p>
-                                </div>
+                                <h4 className="text-sm font-bold text-gray-900 dark:text-white">Gia nhập công ty</h4>
+                                <p className="text-xs text-gray-500 mt-1">12/05/2021</p>
+                                <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">Vị trí: Software Engineer (Thử việc)</p>
                             </div>
                         </div>
                     </div>
                 </div>
+            </div>
             )}
         </div>
     );
