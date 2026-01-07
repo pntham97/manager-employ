@@ -27,13 +27,14 @@ interface CompanySupplier {
     createdAt: string;
 }
 
-
 const AddEmploys = () => {
     const navigate = useNavigate();
     const [showPassword, setShowPassword] = useState(false);
     const [roles, setRoles] = useState<Role[]>([]);
     const [username, setUsername] = useState("");
     const [usernameError, setUsernameError] = useState<string | null>(null);
+    const [showNationalityDropdown, setShowNationalityDropdown] = useState(false);
+    const [showContractInfo, setShowContractInfo] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     type FormErrors = Partial<Record<keyof typeof form, string>>;
     const [errors, setErrors] = useState<FormErrors>({});
@@ -71,7 +72,26 @@ const AddEmploys = () => {
         contractType: true,
         emergencyContactName: "",
         emergencyContactPhone: "",
+        phoneNumber: "",
     });
+    const COUNTRIES = [
+        'Việt Nam',
+        'United States',
+        'Japan',
+        'South Korea',
+        'China',
+        'Singapore',
+        'Thailand',
+        'France',
+        'Germany',
+        'Australia',
+        'Canada',
+    ];
+    
+    const filteredCountries = COUNTRIES.filter((country) =>
+        country.toLowerCase().includes(form.nationality.toLowerCase())
+    );
+
     useEffect(() => {
         const fetchRoles = async () => {
             try {
@@ -155,56 +175,67 @@ const AddEmploys = () => {
             }));
         }
     }, [selectedCompanyId, companies, allSuppliers]);
-    const validateForm = () => {
-        const newErrors: FormErrors = {};
+    const validateField = (
+        name: keyof typeof form,
+        value: string
+    ): string | undefined => {
+        switch (name) {
+            case 'identityNumber':
+                if (!value) return 'Vui lòng nhập CMND/CCCD';
+                if (!/^(\d{9}|\d{12})$/.test(value))
+                    return 'CMND/CCCD phải gồm 9 hoặc 12 số';
+                return;
 
-        // CMND / CCCD: 9 hoặc 12 số
-        if (!form.identityNumber) {
-            newErrors.identityNumber = 'Vui lòng nhập CMND/CCCD';
-        } else if (!/^(\d{9}|\d{12})$/.test(form.identityNumber)) {
-            newErrors.identityNumber = 'CMND/CCCD phải gồm 9 hoặc 12 số';
+            case 'taxCode':
+                if (value && !/^(\d{10}|\d{13})$/.test(value))
+                    return 'Mã số thuế không hợp lệ';
+                return;
+
+            case 'workEmail':
+                if (!value) return 'Vui lòng nhập email';
+                if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value))
+                    return 'Email không hợp lệ';
+                return;
+
+            case 'email':
+                if (!value) return 'Vui lòng nhập email';
+                if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value))
+                    return 'Email không hợp lệ';
+                return;
+
+            case 'bankName':
+                if (!value) return 'Vui lòng nhập tên ngân hàng';
+                return;
+
+            case 'bankAccountNumber':
+                if (!value) return 'Vui lòng nhập số tài khoản';
+                if (!/^\d{6,20}$/.test(value))
+                    return 'Số tài khoản không hợp lệ';
+                return;
+
+            case 'bankAccountHolderName':
+                if (!value) return 'Vui lòng nhập tên chủ tài khoản';
+                return;
+
+            case 'emergencyContactName':
+                if (!value) return 'Vui lòng nhập họ tên';
+                return;
+
+            case 'emergencyContactPhone':
+                if (!value) return 'Vui lòng nhập số điện thoại';
+                if (!/^(0|\+84)\d{9,10}$/.test(value))
+                    return 'Số điện thoại không hợp lệ';
+                return;
+
+            case 'phone':
+                if (!value) return 'Vui lòng nhập số điện thoại';
+                if (!/^(0|\+84)\d{9,10}$/.test(value))
+                    return 'Số điện thoại không hợp lệ';
+                return;
+
+            default:
+                return;
         }
-
-        // Mã số thuế: 10 hoặc 13 số
-        if (form.taxCode && !/^(\d{10}|\d{13})$/.test(form.taxCode)) {
-            newErrors.taxCode = 'Mã số thuế không hợp lệ';
-        }
-
-        // Email công việc
-        if (!form.workEmail) {
-            newErrors.workEmail = 'Vui lòng nhập email';
-        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.workEmail)) {
-            newErrors.workEmail = 'Email không hợp lệ';
-        }
-
-        // Ngân hàng
-        if (!form.bankName) {
-            newErrors.bankName = 'Vui lòng nhập tên ngân hàng';
-        }
-
-        if (!form.bankAccountNumber) {
-            newErrors.bankAccountNumber = 'Vui lòng nhập số tài khoản';
-        } else if (!/^\d{6,20}$/.test(form.bankAccountNumber)) {
-            newErrors.bankAccountNumber = 'Số tài khoản không hợp lệ';
-        }
-
-        if (!form.bankAccountHolderName) {
-            newErrors.bankAccountHolderName = 'Vui lòng nhập tên chủ tài khoản';
-        }
-
-        // Liên hệ khẩn cấp
-        if (!form.emergencyContactName) {
-            newErrors.emergencyContactName = 'Vui lòng nhập họ tên';
-        }
-
-        if (!form.emergencyContactPhone) {
-            newErrors.emergencyContactPhone = 'Vui lòng nhập số điện thoại';
-        } else if (!/^(0|\+84)\d{9,10}$/.test(form.emergencyContactPhone)) {
-            newErrors.emergencyContactPhone = 'Số điện thoại không hợp lệ';
-        }
-
-        setErrors(newErrors);
-        return Object.keys(newErrors).length === 0;
     };
 
     const validateUsername = (username: string): string | null => {
@@ -214,11 +245,37 @@ const AddEmploys = () => {
         }
         return null;
     };
+    const handleChange =
+        (name: keyof typeof form) =>
+            (e: React.ChangeEvent<HTMLInputElement>) => {
+                const value = e.target.value;
+
+                setForm((prev) => ({
+                    ...prev,
+                    [name]: value,
+                }));
+
+                const errorMessage = validateField(name, value);
+
+                setErrors((prev) => ({
+                    ...prev,
+                    [name]: errorMessage,
+                }));
+            };
     const handleAddEmploys = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         const formData = new FormData(e.currentTarget);
         const username = formData.get("username") as string;
-        if (!validateForm()) return;
+        const newErrors: FormErrors = {};
+
+        (Object.keys(form) as (keyof typeof form)[]).forEach((key) => {
+            const error = validateField(key, String(form[key] ?? ''));
+            if (error) newErrors[key] = error;
+        });
+
+        setErrors(newErrors);
+
+        if (Object.keys(newErrors).length > 0) return;
         // ✅ validate trước
         const usernameError = validateUsername(username);
         if (usernameError) {
@@ -227,10 +284,10 @@ const AddEmploys = () => {
         }
 
         // Validate các trường bắt buộc
-        if (!form.employeeName || !form.phone || !form.address || !form.positionId || !form.supplierId || !form.roleId) {
-            alert("Vui lòng điền đầy đủ thông tin bắt buộc");
-            return;
-        }
+        // if (!form.employeeName || !form.phone || !form.address || !form.positionId || !form.supplierId || !form.roleId || ) {
+        //     alert("Vui lòng điền đầy đủ thông tin bắt buộc");
+        //     return;
+        // }
 
         const payload = {
             userName: formData.get("username") as string,
@@ -368,8 +425,15 @@ const AddEmploys = () => {
                                 <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 flex items-center pointer-events-none">
                                     <span className="material-symbols-outlined text-[20px]">mail</span>
                                 </div>
-                                <input name="email" className="form-input w-full rounded-lg border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 h-12 pl-10 pr-4 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm" placeholder="example@company.com" type="email" />
+                                <input name="email"
+                                    onChange={handleChange('email')}
+                                    className="form-input w-full rounded-lg border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 h-12 pl-10 pr-4 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm"
+                                    placeholder="example@company.com"
+                                    type="email" />
                             </div>
+                            {errors.email && (
+                                <span className="text-xs text-red-500">{errors.email}</span>
+                            )}
                         </label>
                         <label className="flex flex-col gap-2 md:col-span-2">
                             <span className="text-slate-900 dark:text-slate-200 text-sm font-medium leading-normal">Địa chỉ <span className="text-red-500">*</span></span>
@@ -418,13 +482,16 @@ const AddEmploys = () => {
                                 </div>
                                 <input
                                     value={form.phone}
-                                    onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                                    name="phoneNumber"
+                                    onChange={handleChange('phone')}
+                                    name="phone"
                                     className="form-input w-full rounded-lg border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 h-12 pl-10 pr-4 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm"
                                     placeholder="0912 xxx xxx"
-                                    type="tel"
+
                                 />
                             </div>
+                            {errors.phone && (
+                                <span className="text-xs text-red-500">{errors.phone}</span>
+                            )}
                         </label>
 
                         <label className="flex flex-col gap-2">
@@ -621,10 +688,31 @@ const AddEmploys = () => {
                                 <input
                                     type="text"
                                     value={form.nationality}
-                                    onChange={(e) => setForm({ ...form, nationality: e.target.value })}
+                                    onChange={(e) => {
+                                        setForm({ ...form, nationality: e.target.value });
+                                        setShowNationalityDropdown(true);
+                                    }}
+                                    onFocus={() => setShowNationalityDropdown(true)}
                                     placeholder="Việt Nam"
                                     className="form-input w-full rounded-lg border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 h-12 pl-10 pr-4 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm"
                                 />
+
+                                {showNationalityDropdown && filteredCountries.length > 0 && (
+                                    <ul className="absolute z-20 mt-1 w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-lg max-h-56 overflow-auto">
+                                        {filteredCountries.map((country) => (
+                                            <li
+                                                key={country}
+                                                onMouseDown={() => {
+                                                    setForm({ ...form, nationality: country });
+                                                    setShowNationalityDropdown(false);
+                                                }}
+                                                className="px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer"
+                                            >
+                                                {country}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
                             </div>
                         </label>
 
@@ -637,10 +725,7 @@ const AddEmploys = () => {
                                 <input
                                     type="text"
                                     value={form.identityNumber}
-                                    onChange={(e) => {
-                                        setForm({ ...form, identityNumber: e.target.value });
-                                        setErrors({ ...errors, identityNumber: undefined });
-                                    }}
+                                    onChange={handleChange('identityNumber')}
                                     placeholder="Nhập số CMND/CCCD"
                                     className="form-input w-full rounded-lg border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 h-12 pl-10 pr-4 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm"
                                 />
@@ -659,10 +744,7 @@ const AddEmploys = () => {
                                 <input
                                     type="text"
                                     value={form.taxCode}
-                                    onChange={(e) => {
-                                        setForm({ ...form, taxCode: e.target.value })
-                                        setErrors({ ...errors, taxCode: undefined })
-                                    }}
+                                    onChange={handleChange('taxCode')}
                                     placeholder="Nhập mã số thuế"
                                     className="form-input w-full rounded-lg border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 h-12 pl-10 pr-4 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm"
                                 />
@@ -681,10 +763,7 @@ const AddEmploys = () => {
                                 <input
                                     type="email"
                                     value={form.workEmail}
-                                    onChange={(e) => {
-                                        setForm({ ...form, workEmail: e.target.value })
-                                        setErrors({ ...errors, workEmail: undefined })
-                                    }}
+                                    onChange={handleChange('workEmail')}
                                     placeholder="work@company.com"
                                     className="form-input w-full rounded-lg border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 h-12 pl-10 pr-4 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm"
                                 />
@@ -713,11 +792,7 @@ const AddEmploys = () => {
                                 <input
                                     type="text"
                                     value={form.bankName}
-                                    onChange={(e) => {
-                                        setForm({ ...form, bankName: e.target.value })
-                                        setErrors({ ...errors, bankName: undefined })
-                                    }
-                                    }
+                                    onChange={handleChange('bankName')}
                                     placeholder="Vietcombank"
                                     className="form-input w-full rounded-lg border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 h-12 pl-10 pr-4 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm"
                                 />
@@ -736,10 +811,7 @@ const AddEmploys = () => {
                                 <input
                                     type="text"
                                     value={form.bankAccountNumber}
-                                    onChange={(e) => {
-                                        setForm({ ...form, bankAccountNumber: e.target.value })
-                                        setErrors({ ...errors, bankAccountNumber: undefined })
-                                    }}
+                                    onChange={handleChange('bankAccountNumber')}
                                     placeholder="Nhập số tài khoản"
                                     className="form-input w-full rounded-lg border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 h-12 pl-10 pr-4 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm"
                                 />
@@ -758,10 +830,7 @@ const AddEmploys = () => {
                                 <input
                                     type="text"
                                     value={form.bankAccountHolderName}
-                                    onChange={(e) => {
-                                        setForm({ ...form, bankAccountHolderName: e.target.value })
-                                        setErrors({ ...errors, bankAccountHolderName: undefined })
-                                    }}
+                                    onChange={handleChange('bankAccountHolderName')}
                                     placeholder="Tên chủ tài khoản"
                                     className="form-input w-full rounded-lg border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 h-12 pl-10 pr-4 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm"
                                 />
@@ -790,10 +859,7 @@ const AddEmploys = () => {
                                 <input
                                     type="text"
                                     value={form.emergencyContactName}
-                                    onChange={(e) => {
-                                        setForm({ ...form, emergencyContactName: e.target.value })
-                                        setErrors({ ...errors, emergencyContactName: undefined })
-                                    }}
+                                    onChange={handleChange('emergencyContactName')}
                                     placeholder="Nhập họ tên người liên hệ"
                                     className="form-input w-full rounded-lg border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 h-12 pl-10 pr-4 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm"
                                 />
@@ -812,10 +878,7 @@ const AddEmploys = () => {
                                 <input
                                     type="tel"
                                     value={form.emergencyContactPhone}
-                                    onChange={(e) => {
-                                        setForm({ ...form, emergencyContactPhone: e.target.value })
-                                        setErrors({ ...errors, emergencyContactPhone: undefined })
-                                    }}
+                                    onChange={handleChange('emergencyContactPhone')}
                                     placeholder="0912 xxx xxx"
                                     className="form-input w-full rounded-lg border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 h-12 pl-10 pr-4 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm"
                                 />
@@ -826,17 +889,35 @@ const AddEmploys = () => {
                         </label>
                     </div>
                 </div>
-
-                <div className="p-6 sm:p-8 border-b border-slate-100 dark:border-slate-800">
-                    <div className="flex items-center gap-3 mb-6">
+                <div className="flex items-center justify-between mx-8 mb-6">
+                    <div className="flex items-center gap-3">
                         <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/10 text-primary">
                             <span className="material-symbols-outlined">description</span>
                         </div>
-                        <h3 className="text-slate-900 dark:text-white text-lg font-bold leading-tight tracking-[-0.015em]">Thông tin hợp đồng</h3>
+                        <h3 className="text-slate-900 dark:text-white text-lg font-bold leading-tight tracking-[-0.015em]">
+                            Thông tin hợp đồng
+                        </h3>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                    <button
+                        type="button"
+                        onClick={() => setShowContractInfo((prev) => !prev)}
+                        className="flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+                    >
+                        {showContractInfo ? 'Ẩn hợp đồng' : 'Hiện hợp đồng'}
+                        <span className="material-symbols-outlined text-[18px]">
+                            {showContractInfo ? 'expand_less' : 'expand_more'}
+                        </span>
+                    </button>
+
+                </div>
+                {showContractInfo && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mx-8 mb-6">
+                        {/* URL ảnh hợp đồng */}
                         <label className="flex flex-col gap-2">
-                            <span className="text-slate-900 dark:text-slate-200 text-sm font-medium leading-normal">URL ảnh hợp đồng</span>
+                            <span className="text-slate-900 dark:text-slate-200 text-sm font-medium leading-normal">
+                                URL ảnh hợp đồng
+                            </span>
                             <div className="relative">
                                 <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 flex items-center pointer-events-none">
                                     <span className="material-symbols-outlined text-[20px]">image</span>
@@ -844,15 +925,20 @@ const AddEmploys = () => {
                                 <input
                                     type="url"
                                     value={form.contractImgUrl}
-                                    onChange={(e) => setForm({ ...form, contractImgUrl: e.target.value })}
+                                    onChange={(e) =>
+                                        setForm({ ...form, contractImgUrl: e.target.value })
+                                    }
                                     placeholder="https://example.com/contract.jpg"
                                     className="form-input w-full rounded-lg border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 h-12 pl-10 pr-4 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm"
                                 />
                             </div>
                         </label>
 
+                        {/* Ngày ký */}
                         <label className="flex flex-col gap-2">
-                            <span className="text-slate-900 dark:text-slate-200 text-sm font-medium leading-normal">Ngày ký hợp đồng</span>
+                            <span className="text-slate-900 dark:text-slate-200 text-sm font-medium leading-normal">
+                                Ngày ký hợp đồng
+                            </span>
                             <div className="relative">
                                 <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 flex items-center pointer-events-none">
                                     <span className="material-symbols-outlined text-[20px]">event</span>
@@ -860,33 +946,47 @@ const AddEmploys = () => {
                                 <input
                                     type="date"
                                     value={form.contractSigningDate}
-                                    onChange={(e) => setForm({ ...form, contractSigningDate: e.target.value })}
+                                    onChange={(e) =>
+                                        setForm({ ...form, contractSigningDate: e.target.value })
+                                    }
                                     className="form-input w-full rounded-lg border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white h-12 pl-10 pr-4 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm"
                                 />
                             </div>
                         </label>
 
+                        {/* Loại hợp đồng */}
                         <label className="flex flex-col gap-2">
-                            <span className="text-slate-900 dark:text-slate-200 text-sm font-medium leading-normal">Loại hợp đồng</span>
+                            <span className="text-slate-900 dark:text-slate-200 text-sm font-medium leading-normal">
+                                Loại hợp đồng
+                            </span>
                             <div className="relative">
                                 <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 flex items-center pointer-events-none">
                                     <span className="material-symbols-outlined text-[20px]">description</span>
                                 </div>
                                 <select
-                                    value={form.contractType ? "true" : "false"}
-                                    onChange={(e) => setForm({ ...form, contractType: e.target.value === "true" })}
+                                    value={form.contractType ? 'true' : 'false'}
+                                    onChange={(e) =>
+                                        setForm({
+                                            ...form,
+                                            contractType: e.target.value === 'true',
+                                        })
+                                    }
                                     className="form-select w-full rounded-lg border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white h-12 pl-10 pr-10 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm appearance-none cursor-pointer"
                                 >
                                     <option value="true">Hợp đồng có thời hạn</option>
-                                    <option value="false">Hợp đồng không xác định thời hạn</option>
+                                    <option value="false">
+                                        Hợp đồng không xác định thời hạn
+                                    </option>
                                 </select>
                                 <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 flex items-center pointer-events-none">
-                                    <span className="material-symbols-outlined text-[20px]">arrow_drop_down</span>
+                                    <span className="material-symbols-outlined text-[20px]">
+                                        arrow_drop_down
+                                    </span>
                                 </div>
                             </div>
                         </label>
                     </div>
-                </div>
+                )}
 
                 <div className="flex items-center justify-end gap-3 p-6 sm:p-8 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-800">
                     <button className="flex items-center justify-center px-6 py-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-transparent text-slate-700 dark:text-slate-300 font-medium text-sm hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors focus:outline-none focus:ring-2 focus:ring-slate-200" type="button">
