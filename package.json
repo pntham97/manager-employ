@@ -19,11 +19,13 @@
     "axios": "^1.13.2",
     "dayjs": "^1.11.19",
     "event-source-polyfill": "^1.0.31",
+    "exceljs": "^4.4.0",
     "lucide-react": "^0.540.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-router-dom": "^7.8.1",
-    "recharts": "^3.1.2"
+    "recharts": "^3.1.2",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@eslint/js": "^9.33.0",

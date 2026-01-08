@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { EventSourcePolyfill } from "event-source-polyfill";
 import { employeeApi, type EmployeeResponse, type PageResponse, type EmployeeStatusEvent, type Company } from "../api/employee.api";
 import { tokenService } from "../utils/token";
+import { exportEmployeesToExcel } from "../utils/exportEmploys";
 
 interface Supplier {
     id: number;
@@ -522,7 +523,7 @@ const ManagerEmploy = () => {
                     </p>
                 </div>
                 <div className="mt-4 md:mt-0 flex gap-3">
-                    <button className="inline-flex items-center px-4 py-2 bg-white dark:bg-card-dark border border-border-light dark:border-border-dark rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[white] shadow-soft transition-colors text-text-main-light dark:text-text-main-dark">
+                    <button onClick={() => exportEmployeesToExcel(employees)} className="inline-flex items-center px-4 py-2 bg-white dark:bg-card-dark border border-border-light dark:border-border-dark rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[white] shadow-soft transition-colors text-text-main-light dark:text-text-main-dark">
                         <span className="material-icons-outlined text-lg mr-2">file_download</span>
                         Xuất Excel
                     </button>
