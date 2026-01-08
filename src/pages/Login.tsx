@@ -26,7 +26,8 @@ const Login = () => {
       setLoading(true);
       const res: any = await authApi.login(payload);
       console.log(res);
-      // const { accessToken, user } = res.accessToken;
+      // Lưu token cả key mới (accessToken) và legacy (token) để SSE/axios dùng thống nhất
+      localStorage.setItem("accessToken", res?.data.accessToken);
       localStorage.setItem("token", res?.data.accessToken);
       localStorage.setItem("refreshToken", res?.data.refreshToken);
       localStorage.setItem("user", JSON.stringify(res?.data.user));

@@ -117,12 +117,48 @@ const Calendar = () => {
         return targetDateOnly < todayDateOnly;
     };
 
+    // Lấy danh sách shiftTypeId mà người dùng đã đăng ký trong ngày
+    const getRegisteredShiftTypeIdsForDay = (day: number): Set<number> => {
+        if (!Array.isArray(scheduleData)) return new Set();
+        const targetDate = new Date(currentYear, currentMonth, day);
+        return new Set(
+            scheduleData
+                .filter((s: any) => {
+                    const reg = toDateOnly(s?.registrationDate ?? s?.registration_date);
+                    if (!reg) return false;
+                    return (
+                        reg.getFullYear() === targetDate.getFullYear() &&
+                        reg.getMonth() === targetDate.getMonth() &&
+                        reg.getDate() === targetDate.getDate()
+                    );
+                })
+                .map((s: any) => {
+                    // Ưu tiên lấy shiftTypeId từ shiftType hoặc detailShiftType
+                    return (
+                        s?.shiftType?.id ||
+                        s?.shiftTypeId ||
+                        s?.detailShiftType?.shiftTypeId ||
+                        s?.detailShiftType?.shiftType?.id
+                    );
+                })
+                .filter(Boolean)
+        );
+    };
+
     const handleRegisterShift = (day: number) => {
         const date = new Date(currentYear, currentMonth, day);
-        const filtered =
+        const registeredIds = getRegisteredShiftTypeIdsForDay(day);
+
+        let filtered =
             Array.isArray(shiftData)
                 ? shiftData.filter((item: any) => isDateInRange(date, item))
                 : [];
+
+        // Nếu ngày này đã đăng ký ca, chỉ hiển thị loại ca đã đăng ký
+        if (registeredIds.size > 0) {
+            filtered = filtered.filter((item: any) => registeredIds.has(item?.id));
+        }
+
         setAvailableShiftTypes(filtered);
         setShiftOptionsDay(day);
         setSelectedShiftDetails([]);
@@ -837,24 +873,33 @@ ${cell.isCurrentMonth && selectedDay === cell.label && cell.isToday
                                     )}
 
                                     {/* Hiển thị các schedule đã đăng ký ứng với ngày này */}
-                                    {cell.isCurrentMonth && typeof cell.label === "number" && (
-                                        <div className="flex flex-col gap-1">
-                                            {scheduleData
-                                                .filter((s: any) => {
-                                                    const reg = toDateOnly(s?.registrationDate ?? s?.registration_date);
-                                                    if (!reg) return false;
-                                                    return (
-                                                        reg.getFullYear() === currentYear &&
-                                                        reg.getMonth() === currentMonth &&
-                                                        reg.getDate() === cell.label
-                                                    );
-                                                })
-                                                .map((s: any, idx: number) => {
+                                    {cell.isCurrentMonth && typeof cell.label === "number" && (() => {
+                                        const daySchedules = scheduleData
+                                            .filter((s: any) => {
+                                                const reg = toDateOnly(s?.registrationDate ?? s?.registration_date);
+                                                if (!reg) return false;
+                                                return (
+                                                    reg.getFullYear() === currentYear &&
+                                                    reg.getMonth() === currentMonth &&
+                                                    reg.getDate() === cell.label
+                                                );
+                                            });
+
+                                        const hasLeaveShift = daySchedules.some((s: any) => {
+                                            const st = s?.detailShiftType ?? s;
+                                            const shiftName = (st?.name ?? "").toString().toLowerCase();
+                                            return shiftName.includes("nghỉ phép");
+                                        });
+
+                                        return (
+                                            <div className={`flex flex-col gap-1 ${hasLeaveShift ? "bg-red-50/70 dark:bg-red-900/20 ring-2 ring-red-300 dark:ring-red-500 rounded-lg p-1" : ""}`}>
+                                                {daySchedules.map((s: any, idx: number) => {
                                                     const st = s?.detailShiftType ?? s;
                                                     const shiftName = st?.name ?? "Ca";
                                                     const startTime = st?.startAt ?? st?.start_at ?? st?.start ?? "";
                                                     const endTime = st?.endAt ?? st?.end_at ?? st?.end ?? "";
                                                     const reviewStatus = s?.reviewStatus ?? s?.review_status ?? true;
+                                                    const isLeaveShift = shiftName.toString().toLowerCase().includes("nghỉ phép");
 
                                                     // Kiểm tra xem ca này có record lịch sử tương ứng không
                                                     const registrationDate = toDateOnly(s?.registrationDate ?? s?.registration_date);
@@ -903,19 +948,43 @@ ${cell.isCurrentMonth && selectedDay === cell.label && cell.isToday
                                                         matchingHistoryItem?.typeHistorySchudule?.name === "Xoá ca";
 
                                                     // Xác định màu dựa trên reviewStatus và yêu cầu xóa
+                                                    if (isLeaveShift) {
+                                                        return (
+                                                            <div
+                                                                key={s?.id ?? `sch-${cell.label}-${idx}`}
+                                                                className="mt-2 rounded-xl border border-[#f5c2c2] bg-[#ffe9e9] text-[#c32026] dark:bg-red-900/25 dark:border-red-500 dark:text-red-200 shadow-sm px-3 py-2 space-y-1"
+                                                            >
+                                                                <div className="flex items-start gap-2">
+                                                                    <span className="material-symbols-outlined text-[18px] text-[#c32026] dark:text-red-200 mt-0.5">event_busy</span>
+                                                                    <div className="flex flex-col">
+                                                                        <span className="text-[14px] font-semibold leading-snug">{shiftName}</span>
+                                                                        <span className="text-[12px] font-medium text-[#c64949] dark:text-red-200/90">
+                                                                            {startTime && endTime ? `${startTime} - ${endTime}` : "Cả ngày"}
+                                                                        </span>
+                                                                        <div className="flex items-center gap-2 mt-1">
+                                                                            <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[#c32026] text-white dark:bg-red-500">
+                                                                                {reviewStatus === false ? "Chờ duyệt" : "Đã duyệt"}
+                                                                            </span>
+                                                                            <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[#f7d4d4] text-[#c32026] dark:bg-red-800/60 dark:text-red-100">
+                                                                                Cá nhân
+                                                                            </span>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    }
+
                                                     let boxClass = "";
                                                     if (reviewStatus === false) {
                                                         if (hasDeleteRequest) {
-                                                            // Màu đỏ cam cho ca có yêu cầu xóa
                                                             boxClass =
                                                                 "text-[11px] px-2 py-1 mt-2 rounded border border-orange-500 text-orange-700 bg-orange-50 dark:border-orange-700 dark:text-orange-200 dark:bg-orange-900/20 cursor-pointer";
                                                         } else {
-                                                            // Màu vàng cho ca chờ duyệt thông thường
                                                             boxClass =
                                                                 "text-[11px] px-2 py-1 mt-2 rounded border border-yellow-500 text-yellow-700 bg-yellow-50 dark:border-yellow-700 dark:text-yellow-200 dark:bg-yellow-900/20 cursor-pointer";
                                                         }
                                                     } else {
-                                                        // Màu xanh cho ca đã duyệt
                                                         boxClass =
                                                             "text-[11px] px-2 py-1 mt-2 rounded border border-green-500 text-green-700 bg-green-50 dark:border-green-700 dark:text-green-200 dark:bg-green-900/20 cursor-pointer";
                                                     }
@@ -929,14 +998,11 @@ ${cell.isCurrentMonth && selectedDay === cell.label && cell.isToday
                                                                 if (!s?.id) return;
                                                                 if (pendingDeleteId !== null || pendingCreate || pendingHistoryId !== null) return;
 
-                                                                // Với các ca màu vàng / đỏ cam (reviewStatus = false),
-                                                                // khi click sẽ chuyển sang chức năng Hủy yêu cầu thay đổi
                                                                 if (reviewStatus === false && matchingHistoryItem) {
                                                                     handleCancelHistory(matchingHistoryItem);
                                                                     return;
                                                                 }
 
-                                                                // Các ca đã duyệt (màu xanh) vẫn cho phép xóa như cũ
                                                                 const ok = window.confirm(
                                                                     "Bạn có chắc muốn xóa ca này khỏi lịch đã đăng ký?"
                                                                 );
@@ -952,8 +1018,9 @@ ${cell.isCurrentMonth && selectedDay === cell.label && cell.isToday
                                                         </div>
                                                     );
                                                 })}
-                                        </div>
-                                    )}
+                                            </div>
+                                        );
+                                    })()}
 
                                     {selectedDay === cell.label && (
                                         <div className="flex flex-col gap-2 mt-1">
