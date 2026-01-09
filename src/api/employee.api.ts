@@ -113,7 +113,7 @@ export interface UpdateEmployeeRequest {
     bankAccountHolderName: string;
     emergencyContactName: string;
     emergencyContactPhone: string;
-    roleName: string;
+    // roleName: string;
 }
 export interface PageResponse<T> {
     data: any;
