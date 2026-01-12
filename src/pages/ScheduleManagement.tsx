@@ -1326,7 +1326,7 @@ const ScheduleManagement = () => {
                                                                                         info.detailShiftTypeId!
                                                                                     )
                                                                                     }
-                                                                                    className="text-[9px] px-1.5 py-1 rounded bg-blue-50 text-blue-700 border border-blue-300 dark:bg-blue-900/30 dark:text-blue-200 dark:border-blue-700 cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
+                                                                                    className={`text-[9px] px-1.5 py-1 rounded border cursor-pointer transition-colors ${style.container}`}
                                                                                     title={tooltipText}
                                                                                 >
                                                                                     <div className="flex items-center justify-between gap-1">
