@@ -1010,6 +1010,8 @@ const ScheduleManagement = () => {
         );
     }
 
+    console.log(maxDetailShiftCount);
+
     return (
         <div className="p-6 lg:p-10 px-8 mx-auto w-full flex flex-col gap-8">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
@@ -1190,9 +1192,6 @@ const ScheduleManagement = () => {
                                 // Loại trừ "Nghỉ phép"
                                 return shiftTypeName.toLowerCase() !== "nghỉ phép";
                             });
-
-                            console.log(shiftTypeData, "hasOtherShiftTypes");
-
                             return (
                                 <div
                                     key={cell.key}
