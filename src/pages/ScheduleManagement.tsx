@@ -1127,6 +1127,15 @@ const ScheduleManagement = () => {
                                 ? getScheduleInfoForDay(cell.label)
                                 : [];
 
+                            // Kiểm tra xem tháng/năm hiện tại có loại ca nào khác ngoài "Nghỉ phép" không
+                            const hasOtherShiftTypes = shiftTypeData.some((st: any) => {
+                                const shiftType = st?.shiftType;
+                                if (!shiftType) return false;
+                                const shiftTypeName = shiftType?.name || "";
+                                // Loại trừ "Nghỉ phép"
+                                return shiftTypeName.toLowerCase() !== "nghỉ phép";
+                            });
+
                             return (
                                 <div
                                     key={cell.key}
@@ -1155,9 +1164,32 @@ const ScheduleManagement = () => {
                                             {cell.isCurrentMonth && typeof cell.label === "number" && (
                                                 (() => {
                                                     const targetDate = new Date(currentYear, currentMonth, cell.label as number);
-                                                    const hasActiveShiftType = shiftTypeData.some((st: any) =>
-                                                        isShiftTypeActiveOnDate(st, targetDate)
-                                                    );
+                                                    // Kiểm tra loại ca hiệu lực (loại trừ "Nghỉ phép")
+                                                    const hasActiveShiftType = shiftTypeData.some((st: any) => {
+                                                        const shiftType = st?.shiftType;
+                                                        if (!shiftType) return false;
+                                                        const shiftTypeName = shiftType?.name || "";
+                                                        // Loại trừ "Nghỉ phép"
+                                                        if (shiftTypeName.toLowerCase() === "nghỉ phép") return false;
+                                                        return isShiftTypeActiveOnDate(st, targetDate);
+                                                    });
+
+                                                    // Nếu tháng/năm hiện tại không có loại ca nào khác ngoài "Nghỉ phép", hiển thị thông báo
+                                                    if (!hasOtherShiftTypes) {
+                                                        const startDatePrefill = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-${String(cell.label).padStart(2, "0")}`;
+                                                        return (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => navigate(`/ScheduleManagement/CreateShiftTypeSupplier?startDate=${startDatePrefill}`)}
+                                                                className="mt-2 max-w-full inline-flex items-center justify-center gap-1 rounded-md border border-blue-300 dark:border-blue-600 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/40 dark:to-indigo-900/30 px-2 py-1 text-[10px] font-medium text-blue-700 dark:text-blue-200 shadow-sm hover:shadow-md hover:from-blue-100 hover:to-indigo-100 dark:hover:from-blue-800/50 dark:hover:to-indigo-800/40 hover:border-blue-400 dark:hover:border-blue-500 transition-all duration-200 active:scale-95 overflow-hidden"
+                                                            >
+                                                                <span className="material-symbols-outlined text-[13px] flex-shrink-0">
+                                                                    add_circle
+                                                                </span>
+                                                                <span className="truncate leading-tight">Chưa đăng ký loại ca · Bấm để bổ sung</span>
+                                                            </button>
+                                                        );
+                                                    }
 
                                                     if (scheduleInfo.length > 0) {
                                                         return (
@@ -1237,12 +1269,12 @@ const ScheduleManagement = () => {
                                                                     <button
                                                                         type="button"
                                                                         onClick={() => openRegisterModalForDay(cell.label as number)}
-                                                                        className="mt-1 inline-flex items-center gap-1 rounded-full border border-blue-200 dark:border-blue-700 bg-blue-50/60 dark:bg-blue-900/30 px-2.5 py-1 text-[11px] font-medium text-blue-700 dark:text-blue-200 hover:bg-blue-100 dark:hover:bg-blue-900/60 transition-colors"
+                                                                        className="mt-1 max-w-full inline-flex items-center justify-center gap-1 rounded-md border border-blue-300 dark:border-blue-600 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/40 dark:to-indigo-900/30 px-2 py-1 text-[10px] font-medium text-blue-700 dark:text-blue-200 shadow-sm hover:shadow-md hover:from-blue-100 hover:to-indigo-100 dark:hover:from-blue-800/50 dark:hover:to-indigo-800/40 hover:border-blue-400 dark:hover:border-blue-500 transition-all duration-200 active:scale-95 overflow-hidden"
                                                                     >
-                                                                        <span className="material-symbols-outlined text-[14px]">
+                                                                        <span className="material-symbols-outlined text-[13px] flex-shrink-0">
                                                                             add_circle
                                                                         </span>
-                                                                        <span>Đăng ký thêm ca</span>
+                                                                        <span className="truncate leading-tight">Đăng ký thêm ca</span>
                                                                     </button>
                                                                 )}
                                                             </div>
@@ -1256,12 +1288,12 @@ const ScheduleManagement = () => {
                                                             <button
                                                                 type="button"
                                                                 onClick={() => navigate(`/ScheduleManagement/CreateShiftTypeSupplier?startDate=${startDatePrefill}`)}
-                                                                className="mt-2 inline-flex items-center gap-1 rounded-full border border-blue-200 dark:border-blue-700 bg-blue-50/60 dark:bg-blue-900/30 px-2.5 py-1 text-[11px] font-medium text-blue-700 dark:text-blue-200 hover:bg-blue-100 dark:hover:bg-blue-900/60 transition-colors"
+                                                                className="mt-2 max-w-full inline-flex items-center justify-center gap-1 rounded-md border border-blue-300 dark:border-blue-600 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/40 dark:to-indigo-900/30 px-2 py-1 text-[10px] font-medium text-blue-700 dark:text-blue-200 shadow-sm hover:shadow-md hover:from-blue-100 hover:to-indigo-100 dark:hover:from-blue-800/50 dark:hover:to-indigo-800/40 hover:border-blue-400 dark:hover:border-blue-500 transition-all duration-200 active:scale-95 overflow-hidden"
                                                             >
-                                                                <span className="material-symbols-outlined text-[14px]">
+                                                                <span className="material-symbols-outlined text-[13px] flex-shrink-0">
                                                                     add_circle
                                                                 </span>
-                                                                <span>Chưa đăng ký loại ca · Bấm để bổ sung</span>
+                                                                <span className="truncate leading-tight">Chưa đăng ký loại ca · Bấm để bổ sung</span>
                                                             </button>
                                                         );
                                                     }
@@ -1271,12 +1303,12 @@ const ScheduleManagement = () => {
                                                         <button
                                                             type="button"
                                                             onClick={() => openRegisterModalForDay(cell.label as number)}
-                                                            className="mt-2 inline-flex items-center gap-1 rounded-full border border-blue-200 dark:border-blue-700 bg-blue-50/60 dark:bg-blue-900/30 px-2.5 py-1 text-[11px] font-medium text-blue-700 dark:text-blue-200 hover:bg-blue-100 dark:hover:bg-blue-900/60 transition-colors"
+                                                            className="mt-2 max-w-full inline-flex items-center justify-center gap-1 rounded-md border border-blue-300 dark:border-blue-600 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/40 dark:to-indigo-900/30 px-2 py-1 text-[10px] font-medium text-blue-700 dark:text-blue-200 shadow-sm hover:shadow-md hover:from-blue-100 hover:to-indigo-100 dark:hover:from-blue-800/50 dark:hover:to-indigo-800/40 hover:border-blue-400 dark:hover:border-blue-500 transition-all duration-200 active:scale-95 overflow-hidden"
                                                         >
-                                                            <span className="material-symbols-outlined text-[14px]">
+                                                            <span className="material-symbols-outlined text-[13px] flex-shrink-0">
                                                                 add_circle
                                                             </span>
-                                                            <span>Chưa có người đăng ký ca · Đăng ký ca</span>
+                                                            <span className="truncate leading-tight">Chưa có người đăng ký ca · Đăng ký ca</span>
                                                         </button>
                                                     );
                                                 })()
