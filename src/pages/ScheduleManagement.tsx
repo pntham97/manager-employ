@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { scheduleApi } from "../api/schedule.api";
 import { shiftTypeSupplierApi } from "../api/shiftTypeSupplier.api";
-import { employeeApi } from "../api/employee.api";
+import { employeeApi, type EmployeeResponse } from "../api/employee.api";
 
 const ScheduleManagement = () => {
     const today = new Date();
@@ -25,18 +25,40 @@ const ScheduleManagement = () => {
         detailShiftTypeName: string;
         startAt: string;
         endAt: string;
-        employees: Array<{ name: string; phone?: string; positionId?: number; roleName?: string }>;
+        detailShiftTypeId: number | null;
+        employees: Array<{ employeeId?: number; name: string; phone?: string; positionId?: number; roleName?: string }>;
     }>({
         show: false,
         day: 0,
         detailShiftTypeName: "",
         startAt: "",
         endAt: "",
+        detailShiftTypeId: null,
         employees: [],
+    });
+    const [newEmployeeId, setNewEmployeeId] = useState<number | null>(null);
+    const [availableEmployees, setAvailableEmployees] = useState<Array<{ id: number; name: string }>>([]);
+    const [loadingEmployees, setLoadingEmployees] = useState(false);
+    const [pendingCreateEmployee, setPendingCreateEmployee] = useState(false);
+    const [registerModal, setRegisterModal] = useState<{
+        show: boolean;
+        day: number;
+        details: Array<{ id: number; name: string; startAt: string; endAt: string }>;
+        selectedDetailId: number | null;
+        employees: Array<{ id: number; name: string }>;
+        selectedEmployeeId: number | null;
+    }>({
+        show: false,
+        day: 0,
+        details: [],
+        selectedDetailId: null,
+        employees: [],
+        selectedEmployeeId: null,
     });
 
     const currentMonth = currentDate.getMonth(); // 0-11
     const currentYear = currentDate.getFullYear();
+    const inactivityTimeoutRef = useRef<number | null>(null);
     const navigate = useNavigate();
 
     // Chuẩn hoá registrationDate về dạng Date chỉ có ngày, tránh lệch 1 ngày do timezone
@@ -118,7 +140,7 @@ const ScheduleManagement = () => {
     const isAdmin = userRole === "ADMIN";
 
     // Load danh sách schedule
-    const loadScheduleData = async () => {
+    const loadScheduleData = useCallback(async () => {
         if (!hasPermission) return;
         setLoading(true);
         try {
@@ -146,10 +168,10 @@ const ScheduleManagement = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [hasPermission, currentMonth, currentYear, isAdmin, selectedSupplierId]);
 
     // Load danh sách shiftType
-    const loadShiftTypeData = async () => {
+    const loadShiftTypeData = useCallback(async () => {
         if (!hasPermission) return;
         try {
             const month = currentMonth + 1;
@@ -169,7 +191,7 @@ const ScheduleManagement = () => {
         } catch (error: any) {
             console.error("Failed to load shift type data", error);
         }
-    };
+    }, [hasPermission, currentMonth, currentYear, isAdmin, selectedSupplierId]);
 
     // Load danh sách suppliers (chỉ cho ADMIN)
     const loadSuppliers = async () => {
@@ -212,8 +234,44 @@ const ScheduleManagement = () => {
         if (!hasPermission) return;
         loadScheduleData();
         loadShiftTypeData();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [currentMonth, currentYear, selectedSupplierId, hasPermission]);
+    }, [currentMonth, currentYear, selectedSupplierId, hasPermission, loadScheduleData, loadShiftTypeData]);
+
+    // Auto reload dữ liệu sau 5 phút không có tương tác
+    useEffect(() => {
+        if (!hasPermission) return;
+        const INACTIVITY_MS = 5 * 60 * 1000;
+
+        const resetInactivityTimer = () => {
+            if (inactivityTimeoutRef.current !== null) {
+                window.clearTimeout(inactivityTimeoutRef.current);
+            }
+            inactivityTimeoutRef.current = window.setTimeout(() => {
+                loadScheduleData();
+                loadShiftTypeData();
+            }, INACTIVITY_MS);
+        };
+
+        const handleActivity = () => {
+            resetInactivityTimer();
+        };
+
+        window.addEventListener("click", handleActivity);
+        window.addEventListener("keydown", handleActivity);
+        window.addEventListener("mousemove", handleActivity);
+        window.addEventListener("scroll", handleActivity);
+
+        resetInactivityTimer();
+
+        return () => {
+            if (inactivityTimeoutRef.current !== null) {
+                window.clearTimeout(inactivityTimeoutRef.current);
+            }
+            window.removeEventListener("click", handleActivity);
+            window.removeEventListener("keydown", handleActivity);
+            window.removeEventListener("mousemove", handleActivity);
+            window.removeEventListener("scroll", handleActivity);
+        };
+    }, [hasPermission, loadScheduleData, loadShiftTypeData]);
 
     // Set mặc định shiftType đầu tiên khi shiftTypeData được load hoặc thay đổi
     useEffect(() => {
@@ -265,8 +323,121 @@ const ScheduleManagement = () => {
 
     const monthLabel = `Tháng ${currentMonth + 1}`;
 
+    // Helper: build registrationDate ISO string từ day trong tháng hiện tại
+    const buildRegistrationDate = (day: number) => {
+        const d = new Date(currentYear, currentMonth, day, 0, 0, 0);
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, "0");
+        const date = String(d.getDate()).padStart(2, "0");
+        const hour = String(d.getHours()).padStart(2, "0");
+        const minute = String(d.getMinutes()).padStart(2, "0");
+        const second = String(d.getSeconds()).padStart(2, "0");
+        return `${year}-${month}-${date}T${hour}:${minute}:${second}`;
+    };
+
+    // Helper: kiểm tra 1 day có là quá khứ so với hôm nay không
+    const isPastDate = (day: number) => {
+        const target = new Date(currentYear, currentMonth, day);
+        const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        const targetOnly = new Date(target.getFullYear(), target.getMonth(), target.getDate());
+        return targetOnly < todayOnly;
+    };
+
+    // Mở modal đăng ký ca cho ngày + loại ca đang chọn
+    const openRegisterModalForDay = async (day: number) => {
+        if (selectedShiftTypeId === null) {
+            window.alert("Vui lòng chọn loại ca ở phía trên trước khi đăng ký ca.");
+            return;
+        }
+
+        // Xác định supplierId cho API (ADMIN dùng selectedSupplierId, MANAGER lấy từ localStorage.employee)
+        let supplierIdForApi: number | undefined = undefined;
+        if (isAdmin) {
+            if (!selectedSupplierId) {
+                window.alert("Vui lòng chọn Supplier trước khi đăng ký ca.");
+                return;
+            }
+            supplierIdForApi = selectedSupplierId;
+        } else {
+            const employeeStr = localStorage.getItem("employee");
+            if (!employeeStr) {
+                window.alert("Không tìm thấy thông tin employee trong localStorage.");
+                return;
+            }
+            try {
+                const employee = JSON.parse(employeeStr);
+                supplierIdForApi = employee?.supplierId;
+            } catch {
+                window.alert("Lỗi đọc thông tin employee từ localStorage.");
+                return;
+            }
+        }
+
+        if (!supplierIdForApi) {
+            window.alert("Không xác định được supplierId để đăng ký ca.");
+            return;
+        }
+
+        const targetDate = new Date(currentYear, currentMonth, day);
+
+        // Lấy danh sách detailShiftType khả dụng cho ngày + loại ca hiện tại
+        const details: Array<{ id: number; name: string; startAt: string; endAt: string }> = [];
+        shiftTypeData.forEach((item: any) => {
+            const shiftType = item?.shiftType;
+            if (!shiftType) return;
+            if (shiftType.id !== selectedShiftTypeId) return;
+            if (!isShiftTypeActiveOnDate(item, targetDate)) return;
+
+            const st = shiftType;
+            const list = st?.listDetailShiftType ?? item?.listDetailShiftType ?? [];
+
+            if (Array.isArray(list)) {
+                list.forEach((d: any) => {
+                    const id = d?.id;
+                    if (!id) return;
+                    if (!details.some((x) => x.id === id)) {
+                        details.push({
+                            id,
+                            name: d?.name ?? "Ca",
+                            startAt: d?.startAt ?? "",
+                            endAt: d?.endAt ?? "",
+                        });
+                    }
+                });
+            }
+        });
+
+        if (details.length === 0) {
+            window.alert("Không tìm thấy ca chi tiết nào khả dụng cho loại ca và ngày đã chọn.");
+            return;
+        }
+
+        // Lấy danh sách nhân viên theo supplier (dùng API GET /employee/list)
+        try {
+            const res = await employeeApi.getList(0, 1000, undefined, supplierIdForApi);
+            const pageData = res.data?.data ?? res.data;
+            const employeeContent = pageData?.content ?? pageData ?? [];
+            const employees = (Array.isArray(employeeContent) ? employeeContent : []) as EmployeeResponse[];
+
+            setRegisterModal({
+                show: true,
+                day,
+                details,
+                selectedDetailId: details[0]?.id ?? null,
+                employees: employees.map((e) => ({
+                    id: e.employeeId,
+                    name: e.name,
+                })),
+                selectedEmployeeId: employees[0]?.employeeId ?? null,
+            });
+        } catch (error: any) {
+            console.error("Lỗi khi tải danh sách nhân viên cho đăng ký ca:", error?.response?.data || error?.message);
+            window.alert("Không thể tải danh sách nhân viên. Vui lòng thử lại.");
+        }
+    };
+
     // Hàm lấy danh sách nhân viên đã đăng ký một ca cụ thể
-    const getEmployeesForShift = (day: number, detailShiftTypeId: number): Array<{ name: string; phone?: string; positionId?: number; roleName?: string }> => {
+    const getEmployeesForShift = (day: number, detailShiftTypeId: number): Array<{ employeeId?: number; name: string; phone?: string; positionId?: number; roleName?: string }> => {
         if (!Array.isArray(scheduleData)) return [];
 
         const daySchedules = scheduleData.filter((s: any) => {
@@ -304,27 +475,267 @@ const ScheduleManagement = () => {
 
                 const roleName = rawRoleName ? String(rawRoleName).toUpperCase() : "";
 
+                // Lấy employeeId từ nhiều nguồn có thể
+                const employeeId = employee?.employeeId ?? employee?.id ?? s?.employeeId ?? s?.employee?.id;
+
                 return {
+                    employeeId: employeeId,
                     name: employee?.name || "Chưa có tên",
                     phone: employee?.phone,
                     positionId: employee?.positionId,
                     roleName,
                 };
             })
-            .filter((emp: any) => emp !== null) as Array<{ name: string; phone?: string; positionId?: number; roleName?: string }>;
+            .filter((emp: any) => emp !== null) as Array<{ employeeId?: number; name: string; phone?: string; positionId?: number; roleName?: string }>;
     };
 
     // Hàm xử lý click vào ca để hiển thị danh sách nhân viên
-    const handleShiftClick = (day: number, detailShiftTypeName: string, startAt: string, endAt: string, detailShiftTypeId: number) => {
-        const employees = getEmployeesForShift(day, detailShiftTypeId);
+    const handleShiftClick = async (
+        day: number,
+        detailShiftTypeName: string,
+        startAt: string,
+        endAt: string,
+        detailShiftTypeId: number
+    ) => {
+        const employeesInShift = getEmployeesForShift(day, detailShiftTypeId);
         setEmployeeListModal({
             show: true,
             day,
             detailShiftTypeName,
             startAt,
             endAt,
-            employees,
+            detailShiftTypeId,
+            employees: employeesInShift,
         });
+
+        // Reset danh sách nhân viên khả dụng & lựa chọn hiện tại
+        setAvailableEmployees([]);
+        setNewEmployeeId(null);
+
+        // Xác định supplierId dùng cho API lấy danh sách nhân viên (GET /employee/list)
+        let supplierIdForApi: number | undefined = undefined;
+        if (isAdmin) {
+            if (!selectedSupplierId) {
+                window.alert("Vui lòng chọn supplier trước khi xem danh sách nhân viên.");
+                return;
+            }
+            supplierIdForApi = selectedSupplierId;
+        } else {
+            const employeeStr = localStorage.getItem("employee");
+            if (!employeeStr) {
+                console.warn("Không tìm thấy thông tin employee trong localStorage khi mở modal danh sách nhân viên.");
+                return;
+            }
+            try {
+                const employee = JSON.parse(employeeStr);
+                supplierIdForApi = employee?.supplierId;
+            } catch {
+                console.warn("Lỗi đọc thông tin employee từ localStorage khi mở modal danh sách nhân viên.");
+                return;
+            }
+        }
+
+        if (!supplierIdForApi) {
+            return;
+        }
+
+        try {
+            setLoadingEmployees(true);
+            const res = await employeeApi.getList(0, 1000, undefined, supplierIdForApi);
+            const pageData = res.data?.data ?? res.data;
+            const employeeContent = pageData?.content ?? pageData ?? [];
+            const employees = (Array.isArray(employeeContent) ? employeeContent : []) as EmployeeResponse[];
+
+            const mapped = employees.map((e) => ({
+                id: e.employeeId,
+                name: e.name,
+            }));
+
+            // Loại bỏ những nhân viên đã đăng ký ca này khỏi danh sách
+            // Tạo Set chứa employeeId đã đăng ký
+            const registeredEmployeeIds = new Set(
+                employeesInShift
+                    .map((emp) => emp.employeeId)
+                    .filter((id): id is number => id !== undefined && id !== null)
+            );
+
+            // Tạo Set chứa tên nhân viên đã đăng ký (fallback nếu không có employeeId)
+            const registeredEmployeeNames = new Set(
+                employeesInShift
+                    .map((emp) => emp.name?.toLowerCase().trim())
+                    .filter((name): name is string => !!name)
+            );
+
+            // Filter: loại bỏ nếu có employeeId khớp HOẶC tên khớp
+            const filteredMapped = mapped.filter((emp) => {
+                // Nếu có employeeId trong danh sách đã đăng ký → loại bỏ
+                if (registeredEmployeeIds.has(emp.id)) {
+                    return false;
+                }
+                // Nếu tên khớp với nhân viên đã đăng ký → loại bỏ (fallback)
+                if (registeredEmployeeNames.has(emp.name?.toLowerCase().trim() || "")) {
+                    return false;
+                }
+                return true;
+            });
+
+            // Debug log
+            console.log("🔍 [DEBUG] Filter employees:", {
+                totalEmployees: mapped.length,
+                registeredCount: employeesInShift.length,
+                registeredIds: Array.from(registeredEmployeeIds),
+                registeredNames: Array.from(registeredEmployeeNames),
+                filteredCount: filteredMapped.length,
+            });
+
+            setAvailableEmployees(filteredMapped);
+
+            // Mặc định chọn nhân viên đầu tiên nếu chưa chọn
+            if (filteredMapped.length > 0) {
+                setNewEmployeeId((prev) => prev ?? filteredMapped[0].id);
+            } else {
+                setNewEmployeeId(null);
+            }
+        } catch (error: any) {
+            console.error(
+                "Lỗi khi tải danh sách nhân viên (GET /employee/list) cho modal danh sách nhân viên:",
+                error?.response?.data || error?.message
+            );
+            window.alert("Không thể tải danh sách nhân viên. Vui lòng thử lại.");
+        } finally {
+            setLoadingEmployees(false);
+        }
+    };
+
+    // Đăng ký ca cho nhân viên từ modal danh sách nhân viên
+    const handleCreateScheduleForEmployee = async () => {
+        if (!employeeListModal.show || !employeeListModal.day || !employeeListModal.detailShiftTypeId) return;
+        if (!newEmployeeId) {
+            window.alert("Vui lòng nhập ID nhân viên cần đăng ký ca.");
+            return;
+        }
+
+        const employeeIdNum = newEmployeeId;
+        if (!employeeIdNum || employeeIdNum <= 0) {
+            window.alert("ID nhân viên không hợp lệ.");
+            return;
+        }
+
+        // Xác định supplierId dùng cho API
+        let supplierIdForApi: number | undefined = undefined;
+        if (isAdmin) {
+            if (!selectedSupplierId) {
+                window.alert("Vui lòng chọn supplier trước khi đăng ký ca cho nhân viên.");
+                return;
+            }
+            supplierIdForApi = selectedSupplierId;
+        } else {
+            // MANAGER: lấy supplierId từ localStorage.employee giống như Calendar
+            const employeeStr = localStorage.getItem("employee");
+            if (!employeeStr) {
+                window.alert("Không tìm thấy thông tin employee trong localStorage.");
+                return;
+            }
+            try {
+                const employee = JSON.parse(employeeStr);
+                supplierIdForApi = employee?.supplierId;
+            } catch {
+                window.alert("Lỗi đọc thông tin employee từ localStorage.");
+                return;
+            }
+        }
+
+        if (!supplierIdForApi) {
+            window.alert("Không xác định được supplierId để đăng ký ca.");
+            return;
+        }
+
+        const registrationDate = buildRegistrationDate(employeeListModal.day);
+        const payload: any = {
+            supplierId: supplierIdForApi,
+            detailShiftTypeId: employeeListModal.detailShiftTypeId,
+            registrationDate,
+            employeeId: employeeIdNum,
+        };
+
+        // Nếu là ngày quá khứ, thêm dateRequest để backend xử lý như bổ sung ca
+        if (isPastDate(employeeListModal.day)) {
+            payload.dateRequest = registrationDate;
+        }
+
+        const ok = window.confirm(
+            `Bạn có chắc muốn đăng ký ca "${employeeListModal.detailShiftTypeName}" ngày ${employeeListModal.day} cho nhân viên ID=${employeeIdNum}?`
+        );
+        if (!ok) return;
+
+        try {
+            setPendingCreateEmployee(true);
+            const res = await scheduleApi.create(payload);
+            console.log("Đăng ký ca thành công từ màn quản lý:", res.data);
+
+            // Reload lại dữ liệu lịch
+            await loadScheduleData();
+
+            window.alert("Đăng ký ca cho nhân viên thành công.");
+            setNewEmployeeId(null);
+        } catch (error: any) {
+            console.error("Lỗi khi đăng ký ca từ màn quản lý:", error?.response?.data || error?.message);
+            const msg = error?.response?.data?.message || error?.message || "Đã xảy ra lỗi khi đăng ký ca.";
+            window.alert(msg);
+        } finally {
+            setPendingCreateEmployee(false);
+        }
+    };
+
+    // Xóa ca đăng ký cho một nhân viên cụ thể từ modal danh sách nhân viên
+    const handleDeleteScheduleForEmployee = async (employeeName: string) => {
+        if (!employeeListModal.show || !employeeListModal.day || !employeeListModal.detailShiftTypeId) return;
+
+        const ok = window.confirm(
+            `Bạn có chắc muốn xóa ca "${employeeListModal.detailShiftTypeName}" cho nhân viên "${employeeName}" ngày ${employeeListModal.day}?`
+        );
+        if (!ok) return;
+
+        try {
+            // Tìm schedule phù hợp theo ngày, detailShiftTypeId và tên nhân viên
+            const target = scheduleData.find((s: any) => {
+                const regDate = s?.registrationDate;
+                const d = toRegistrationDateOnly(regDate);
+                if (!d) return false;
+                const isSameDay =
+                    d.getFullYear() === currentYear &&
+                    d.getMonth() === currentMonth &&
+                    d.getDate() === employeeListModal.day;
+
+                const detailShiftTypeId = s?.detailShiftType?.id;
+                const empName = s?.employee?.name;
+
+                return (
+                    isSameDay &&
+                    detailShiftTypeId === employeeListModal.detailShiftTypeId &&
+                    empName === employeeName
+                );
+            });
+
+            if (!target?.id) {
+                window.alert("Không tìm thấy bản ghi ca làm để xóa cho nhân viên này.");
+                return;
+            }
+
+            await scheduleApi.delete(target.id);
+
+            // Reload lại dữ liệu sau khi xóa
+            await loadScheduleData();
+
+            // Cập nhật lại danh sách nhân viên trong modal (loại bỏ nhân viên vừa xóa)
+            setEmployeeListModal((prev) => ({
+                ...prev,
+                employees: prev.employees.filter((e) => e.name !== employeeName),
+            }));
+        } catch (error: any) {
+            console.error("Lỗi khi xóa ca từ màn quản lý:", error?.response?.data || error?.message);
+            window.alert("Đã xảy ra lỗi khi xóa ca. Vui lòng thử lại.");
+        }
     };
 
     // Hàm lấy thông tin schedule theo ngày
@@ -750,75 +1161,90 @@ const ScheduleManagement = () => {
 
                                                     if (scheduleInfo.length > 0) {
                                                         return (
-                                                            <div className="mt-1 flex flex-col gap-1 max-h-[90px] overflow-y-auto">
-                                                                {scheduleInfo.map((info, idx) => {
-                                                                    // Nếu đã chọn shiftType: hiển thị chi tiết từng ca với số lượng người đăng ký
-                                                                    if (info.isDetail && info.detailShiftTypeId) {
-                                                                        const employeeCount = info.employeeCount || 0;
-                                                                        const employeeNames = info.employeeNames || [];
-                                                                        let managerCount = info.managerCount || 0;
-                                                                        let userCount = info.userCount || 0;
-                                                                        const otherCount = info.otherCount || 0;
-                                                                        // Nếu cả USER và MANAGER đều 0 nhưng có người, gán toàn bộ vào USER
-                                                                        if (employeeCount > 0 && managerCount === 0 && userCount === 0) {
-                                                                            userCount = employeeCount;
-                                                                        }
-                                                                        const roleSummary = [
-                                                                            managerCount ? `MANAGER: ${managerCount}` : "",
-                                                                            userCount ? `USER: ${userCount}` : "",
-                                                                            otherCount ? `OTHER: ${otherCount}` : "",
-                                                                        ].filter(Boolean).join("\n");
-                                                                        const tooltipText = employeeNames.length > 0
-                                                                            ? `${info.detailShiftTypeName} (${info.startAt} - ${info.endAt})\nTổng: ${employeeCount}\n${roleSummary ? `${roleSummary}\n` : ""}Danh sách: ${employeeNames.join(", ")}\n\nClick để xem chi tiết`
-                                                                            : `${info.detailShiftTypeName} (${info.startAt} - ${info.endAt})\nTổng: ${employeeCount}\n${roleSummary ? `${roleSummary}\n` : ""}\nClick để xem chi tiết`;
+                                                            <div className="mt-1 flex flex-col gap-1">
+                                                                <div className="max-h-[90px] overflow-y-auto flex flex-col gap-1">
+                                                                    {scheduleInfo.map((info, idx) => {
+                                                                        // Nếu đã chọn shiftType: hiển thị chi tiết từng ca với số lượng người đăng ký
+                                                                        if (info.isDetail && info.detailShiftTypeId) {
+                                                                            const employeeCount = info.employeeCount || 0;
+                                                                            const employeeNames = info.employeeNames || [];
+                                                                            let managerCount = info.managerCount || 0;
+                                                                            let userCount = info.userCount || 0;
+                                                                            const otherCount = info.otherCount || 0;
+                                                                            // Nếu cả USER và MANAGER đều 0 nhưng có người, gán toàn bộ vào USER
+                                                                            if (employeeCount > 0 && managerCount === 0 && userCount === 0) {
+                                                                                userCount = employeeCount;
+                                                                            }
+                                                                            const roleSummary = [
+                                                                                managerCount ? `MANAGER: ${managerCount}` : "",
+                                                                                userCount ? `USER: ${userCount}` : "",
+                                                                                otherCount ? `OTHER: ${otherCount}` : "",
+                                                                            ].filter(Boolean).join("\n");
+                                                                            const tooltipText = employeeNames.length > 0
+                                                                                ? `${info.detailShiftTypeName} (${info.startAt} - ${info.endAt})\nTổng: ${employeeCount}\n${roleSummary ? `${roleSummary}\n` : ""}Danh sách: ${employeeNames.join(", ")}\n\nClick để xem chi tiết`
+                                                                                : `${info.detailShiftTypeName} (${info.startAt} - ${info.endAt})\nTổng: ${employeeCount}\n${roleSummary ? `${roleSummary}\n` : ""}\nClick để xem chi tiết`;
 
-                                                                        return (
-                                                                            <div
-                                                                                key={idx}
-                                                                                onClick={() => handleShiftClick(
-                                                                                    cell.label as number,
-                                                                                    info.detailShiftTypeName || "",
-                                                                                    info.startAt || "",
-                                                                                    info.endAt || "",
-                                                                                    info.detailShiftTypeId!
-                                                                                )}
-                                                                                className="text-[9px] px-1.5 py-1 rounded bg-blue-50 text-blue-700 border border-blue-300 dark:bg-blue-900/30 dark:text-blue-200 dark:border-blue-700 cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
-                                                                                title={tooltipText}
-                                                                            >
-                                                                                <div className="flex items-center justify-between gap-1">
-                                                                                    <div className="font-semibold truncate flex-1">{info.detailShiftTypeName}</div>
-                                                                                    {employeeCount > 0 && (
-                                                                                        <div className="flex items-center gap-1 whitespace-nowrap">
-                                                                                            <span className="text-[8px] font-semibold text-blue-800 dark:text-blue-200 bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 rounded">
-                                                                                                USER: {userCount}
-                                                                                            </span>
-                                                                                            <span className="text-[8px] font-semibold text-blue-800 dark:text-blue-200 bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 rounded">
-                                                                                                MANAGER: {managerCount}
-                                                                                            </span>
+                                                                            return (
+                                                                                <div
+                                                                                    key={idx}
+                                                                                    onClick={() => handleShiftClick(
+                                                                                        cell.label as number,
+                                                                                        info.detailShiftTypeName || "",
+                                                                                        info.startAt || "",
+                                                                                        info.endAt || "",
+                                                                                        info.detailShiftTypeId!
+                                                                                    )}
+                                                                                    className="text-[9px] px-1.5 py-1 rounded bg-blue-50 text-blue-700 border border-blue-300 dark:bg-blue-900/30 dark:text-blue-200 dark:border-blue-700 cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
+                                                                                    title={tooltipText}
+                                                                                >
+                                                                                    <div className="flex items-center justify-between gap-1">
+                                                                                        <div className="font-semibold truncate flex-1">{info.detailShiftTypeName}</div>
+                                                                                        {employeeCount > 0 && (
+                                                                                            <div className="flex items-center gap-1 whitespace-nowrap">
+                                                                                                <span className="text-[8px] font-semibold text-blue-800 dark:text-blue-200 bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 rounded">
+                                                                                                    USER: {userCount}
+                                                                                                </span>
+                                                                                                <span className="text-[8px] font-semibold text-blue-800 dark:text-blue-200 bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 rounded">
+                                                                                                    MANAGER: {managerCount}
+                                                                                                </span>
+                                                                                            </div>
+                                                                                        )}
+                                                                                    </div>
+                                                                                    {info.startAt && info.endAt && (
+                                                                                        <div className="text-[8px] text-blue-600 dark:text-blue-300 mt-0.5">
+                                                                                            {info.startAt} - {info.endAt}
                                                                                         </div>
                                                                                     )}
                                                                                 </div>
-                                                                                {info.startAt && info.endAt && (
-                                                                                    <div className="text-[8px] text-blue-600 dark:text-blue-300 mt-0.5">
-                                                                                        {info.startAt} - {info.endAt}
-                                                                                    </div>
-                                                                                )}
+                                                                            );
+                                                                        }
+
+                                                                        // Nếu không chọn shiftType: hiển thị tổng hợp như cũ
+                                                                        return (
+                                                                            <div
+                                                                                key={idx}
+                                                                                className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-300 dark:bg-blue-900/30 dark:text-blue-200 dark:border-blue-700 text-center"
+                                                                                title={`${info.shiftTypeName}: ${info.detailCount} ca chi tiết`}
+                                                                            >
+                                                                                <span className="font-semibold">{info.shiftTypeName}</span>
+                                                                                <span className="text-[9px]">: {info.detailCount} ca</span>
                                                                             </div>
                                                                         );
-                                                                    }
-
-                                                                    // Nếu không chọn shiftType: hiển thị tổng hợp như cũ
-                                                                    return (
-                                                                        <div
-                                                                            key={idx}
-                                                                            className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-300 dark:bg-blue-900/30 dark:text-blue-200 dark:border-blue-700 text-center"
-                                                                            title={`${info.shiftTypeName}: ${info.detailCount} ca chi tiết`}
-                                                                        >
-                                                                            <span className="font-semibold">{info.shiftTypeName}</span>
-                                                                            <span className="text-[9px]">: {info.detailCount} ca</span>
-                                                                        </div>
-                                                                    );
-                                                                })}
+                                                                    })}
+                                                                </div>
+                                                                {/* Nút đăng ký thêm ca - hiển thị ngay cả khi đã có ca đăng ký */}
+                                                                {hasActiveShiftType && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => openRegisterModalForDay(cell.label as number)}
+                                                                        className="mt-1 inline-flex items-center gap-1 rounded-full border border-blue-200 dark:border-blue-700 bg-blue-50/60 dark:bg-blue-900/30 px-2.5 py-1 text-[11px] font-medium text-blue-700 dark:text-blue-200 hover:bg-blue-100 dark:hover:bg-blue-900/60 transition-colors"
+                                                                    >
+                                                                        <span className="material-symbols-outlined text-[14px]">
+                                                                            add_circle
+                                                                        </span>
+                                                                        <span>Đăng ký thêm ca</span>
+                                                                    </button>
+                                                                )}
                                                             </div>
                                                         );
                                                     }
@@ -842,9 +1268,16 @@ const ScheduleManagement = () => {
 
                                                     // Có loại ca hiệu lực nhưng chưa có đăng ký
                                                     return (
-                                                        <div className="mt-2 text-[11px] text-slate-400 dark:text-slate-500 italic">
-                                                            Chưa có người đăng ký ca
-                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => openRegisterModalForDay(cell.label as number)}
+                                                            className="mt-2 inline-flex items-center gap-1 rounded-full border border-blue-200 dark:border-blue-700 bg-blue-50/60 dark:bg-blue-900/30 px-2.5 py-1 text-[11px] font-medium text-blue-700 dark:text-blue-200 hover:bg-blue-100 dark:hover:bg-blue-900/60 transition-colors"
+                                                        >
+                                                            <span className="material-symbols-outlined text-[14px]">
+                                                                add_circle
+                                                            </span>
+                                                            <span>Chưa có người đăng ký ca · Đăng ký ca</span>
+                                                        </button>
                                                     );
                                                 })()
                                             )}
@@ -944,11 +1377,21 @@ const ScheduleManagement = () => {
                                                         <div className="font-medium text-[#111318] dark:text-white">
                                                             {employee.name}
                                                         </div>
-                                                        {employee.roleName && (
-                                                            <span className="inline-flex items-center rounded-full bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 text-[11px] font-semibold text-blue-700 dark:text-blue-200">
-                                                                {employee.roleName}
-                                                            </span>
-                                                        )}
+                                                        <div className="flex items-center gap-2">
+                                                            {employee.roleName && (
+                                                                <span className="inline-flex items-center rounded-full bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 text-[11px] font-semibold text-blue-700 dark:text-blue-200">
+                                                                    {employee.roleName}
+                                                                </span>
+                                                            )}
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleDeleteScheduleForEmployee(employee.name)}
+                                                                className="inline-flex items-center px-2 py-0.5 rounded-md border border-red-200 dark:border-red-500 text-[11px] text-red-600 dark:text-red-300 bg-red-50 dark:bg-red-900/30 hover:bg-red-100 dark:hover:bg-red-900/60 transition-colors"
+                                                            >
+                                                                <span className="material-symbols-outlined text-[14px] mr-0.5">delete</span>
+                                                                Xóa ca
+                                                            </button>
+                                                        </div>
                                                     </div>
                                                     {employee.phone && (
                                                         <div className="text-xs text-[#616f89] dark:text-[#9ca3af] mt-0.5">
@@ -967,12 +1410,190 @@ const ScheduleManagement = () => {
                                 </div>
                             )}
                         </div>
-                        <div className="flex justify-end">
+                        <div className="mt-4 flex flex-col gap-3">
+                            <div className="border-t border-[#dbdfe6] dark:border-[#4b5563] pt-3">
+                                <h5 className="text-sm font-semibold text-[#111318] dark:text-white mb-2">
+                                    Đăng ký thêm ca cho nhân viên
+                                </h5>
+                                <p className="text-xs text-[#616f89] dark:text-[#9ca3af] mb-2">
+                                    Chọn <strong>nhân viên</strong> từ danh sách để đăng ký ca này cho họ. Chỉ ADMIN hoặc MANAGER đúng
+                                    supplier mới có quyền.
+                                </p>
+                                <div className="flex flex-col gap-2">
+                                    <div className="flex items-center gap-2">
+                                        <select
+                                            className="flex-1 px-3 py-2 border border-[#dbdfe6] dark:border-[#4b5563] rounded-lg bg-white dark:bg-[#111827] text-sm text-[#111318] dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                            value={newEmployeeId ?? ""}
+                                            onChange={(e) =>
+                                                setNewEmployeeId(e.target.value ? Number(e.target.value) : null)
+                                            }
+                                            disabled={loadingEmployees || availableEmployees.length === 0}
+                                        >
+                                            <option value="">Chọn nhân viên...</option>
+                                            {availableEmployees.map((emp) => (
+                                                <option key={emp.id} value={emp.id}>
+                                                    #{emp.id} - {emp.name}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <button
+                                            type="button"
+                                            onClick={handleCreateScheduleForEmployee}
+                                            disabled={pendingCreateEmployee || !newEmployeeId}
+                                            className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700 text-sm disabled:opacity-60"
+                                        >
+                                            {pendingCreateEmployee ? "Đang đăng ký..." : "Đăng ký ca"}
+                                        </button>
+                                    </div>
+                                    {loadingEmployees && (
+                                        <p className="text-xs text-[#616f89] dark:text-[#9ca3af]">
+                                            Đang tải danh sách nhân viên...
+                                        </p>
+                                    )}
+                                    {!loadingEmployees && availableEmployees.length === 0 && (
+                                        <p className="text-xs text-[#9ca3af]">
+                                            Không có nhân viên khả dụng để đăng ký ca này.
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+                            <div className="flex justify-end">
+                                <button
+                                    className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700 text-sm"
+                                    onClick={() => setEmployeeListModal({ ...employeeListModal, show: false })}
+                                >
+                                    Đóng
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {registerModal.show && (
+                <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center px-4" onClick={() => setRegisterModal({ ...registerModal, show: false })}>
+                    <div className="bg-white dark:bg-[#111827] rounded-lg shadow-xl max-w-md w-full p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <span className="material-symbols-outlined text-blue-600 dark:text-blue-400 text-3xl">event_available</span>
+                                <div>
+                                    <h4 className="text-lg font-semibold text-[#111318] dark:text-white">Đăng ký ca cho nhân viên</h4>
+                                    <p className="text-sm text-[#616f89] dark:text-[#9ca3af]">
+                                        Ngày {registerModal.day} - Supplier hiện tại
+                                    </p>
+                                </div>
+                            </div>
                             <button
-                                className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700 text-sm"
-                                onClick={() => setEmployeeListModal({ ...employeeListModal, show: false })}
+                                onClick={() => setRegisterModal({ ...registerModal, show: false })}
+                                className="text-[#616f89] dark:text-[#9ca3af] hover:text-[#111318] dark:hover:text-white"
                             >
-                                Đóng
+                                <span className="material-symbols-outlined">close</span>
+                            </button>
+                        </div>
+
+                        <div className="space-y-3">
+                            <div>
+                                <label className="block text-xs font-medium text-[#616f89] dark:text-[#9ca3af] mb-1">
+                                    Chọn ca chi tiết
+                                </label>
+                                <select
+                                    className="w-full px-3 py-2 border border-[#dbdfe6] dark:border-[#4b5563] rounded-lg bg-white dark:bg-[#111827] text-sm text-[#111318] dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                    value={registerModal.selectedDetailId ?? ""}
+                                    onChange={(e) =>
+                                        setRegisterModal((prev) => ({
+                                            ...prev,
+                                            selectedDetailId: e.target.value ? Number(e.target.value) : null,
+                                        }))
+                                    }
+                                >
+                                    {registerModal.details.map((d) => (
+                                        <option key={d.id} value={d.id}>
+                                            {d.name} ({d.startAt} - {d.endAt})
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-medium text-[#616f89] dark:text-[#9ca3af] mb-1">
+                                    Chọn nhân viên
+                                </label>
+                                <select
+                                    className="w-full px-3 py-2 border border-[#dbdfe6] dark:border-[#4b5563] rounded-lg bg-white dark:bg-[#111827] text-sm text-[#111318] dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                    value={registerModal.selectedEmployeeId ?? ""}
+                                    onChange={(e) =>
+                                        setRegisterModal((prev) => ({
+                                            ...prev,
+                                            selectedEmployeeId: e.target.value ? Number(e.target.value) : null,
+                                        }))
+                                    }
+                                >
+                                    {registerModal.employees.map((emp) => (
+                                        <option key={emp.id} value={emp.id}>
+                                            #{emp.id} - {emp.name}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end gap-2 pt-2">
+                            <button
+                                className="px-4 py-2 rounded border border-[#dbdfe6] dark:border-[#4b5563] text-[#111318] dark:text-white hover:bg-gray-100 dark:hover:bg-[#374151] text-sm"
+                                onClick={() => setRegisterModal({ ...registerModal, show: false })}
+                            >
+                                Hủy
+                            </button>
+                            <button
+                                className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700 text-sm disabled:opacity-60"
+                                disabled={!registerModal.selectedDetailId || !registerModal.selectedEmployeeId}
+                                onClick={async () => {
+                                    if (!registerModal.selectedDetailId || !registerModal.selectedEmployeeId) return;
+
+                                    // Xác định supplierId
+                                    let supplierIdForApi: number | undefined = undefined;
+                                    if (isAdmin) {
+                                        supplierIdForApi = selectedSupplierId;
+                                    } else {
+                                        const employeeStr = localStorage.getItem("employee");
+                                        if (employeeStr) {
+                                            try {
+                                                const emp = JSON.parse(employeeStr);
+                                                supplierIdForApi = emp?.supplierId;
+                                            } catch {
+                                                supplierIdForApi = undefined;
+                                            }
+                                        }
+                                    }
+                                    if (!supplierIdForApi) {
+                                        window.alert("Không xác định được supplierId để đăng ký ca.");
+                                        return;
+                                    }
+
+                                    const registrationDate = buildRegistrationDate(registerModal.day);
+                                    const payload: any = {
+                                        supplierId: supplierIdForApi,
+                                        detailShiftTypeId: registerModal.selectedDetailId,
+                                        registrationDate,
+                                        employeeId: registerModal.selectedEmployeeId,
+                                    };
+                                    if (isPastDate(registerModal.day)) {
+                                        payload.dateRequest = registrationDate;
+                                    }
+
+                                    try {
+                                        await scheduleApi.create(payload);
+                                        await loadScheduleData();
+                                        window.alert("Đăng ký ca cho nhân viên thành công.");
+                                        setRegisterModal({ ...registerModal, show: false });
+                                    } catch (error: any) {
+                                        console.error("Lỗi khi đăng ký ca từ modal đăng ký:", error?.response?.data || error?.message);
+                                        const msg = error?.response?.data?.message || error?.message || "Đã xảy ra lỗi khi đăng ký ca.";
+                                        window.alert(msg);
+                                    }
+                                }}
+                            >
+                                Đăng ký ca
                             </button>
                         </div>
                     </div>

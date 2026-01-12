@@ -1,8 +1,6 @@
-import { useEffect, useState } from "react";
-// Nếu dùng TypeScript, đảm bảo đã khai báo module "event-source-polyfill" trong file d.ts
-import { EventSourcePolyfill } from "event-source-polyfill";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { scheduleApi } from "../api/schedule.api";
-import { tokenService } from "../utils/token";
+import { employeeApi } from "../api/employee.api";
 
 const ScheduleApproval = () => {
     const today = new Date();
@@ -25,6 +23,7 @@ const ScheduleApproval = () => {
 
     const currentMonth = currentDate.getMonth(); // 0-11
     const currentYear = currentDate.getFullYear();
+    const inactivityTimeoutRef = useRef<number | null>(null);
 
     // Kiểm tra quyền ADMIN hoặc MANAGER
     const checkPermission = () => {
@@ -41,14 +40,35 @@ const ScheduleApproval = () => {
 
     const hasPermission = checkPermission();
 
+    // Lấy role để biết có phải ADMIN không (ADMIN sẽ chọn supplierId để lọc)
+    const getUserRole = () => {
+        const userStr = localStorage.getItem("user");
+        if (!userStr) return null;
+        try {
+            const user = JSON.parse(userStr);
+            return user?.role?.name || user?.role || null;
+        } catch {
+            return null;
+        }
+    };
+
+    const userRole = getUserRole();
+    const isAdmin = userRole === "ADMIN";
+
+    // Danh sách supplier (chỉ dùng cho ADMIN)
+    const [suppliers, setSuppliers] = useState<Array<{ id: number; name: string; status: boolean }>>([]);
+    const [selectedSupplierId, setSelectedSupplierId] = useState<number | undefined>(undefined);
+
     // Hàm load danh sách yêu cầu phê duyệt theo tháng/năm hiện tại
-    const loadApprovalData = async () => {
+    const loadApprovalData = useCallback(async () => {
         if (!hasPermission) return;
         setLoading(true);
         try {
             const month = currentMonth + 1;
             const year = currentYear;
-            const res = await scheduleApi.getHistory(month, year);
+            // Với ADMIN: truyền supplierId nếu có, với MANAGER: không truyền supplierId (backend lấy từ token)
+            const supplierIdForApi = isAdmin ? selectedSupplierId : undefined;
+            const res = await scheduleApi.getHistory(month, year, supplierIdForApi);
             const payload = Array.isArray(res.data) ? res.data : res.data?.data;
             // API tự động lọc chỉ "Chờ duyệt" cho ADMIN/MANAGER
             setApprovalData(payload ?? []);
@@ -61,169 +81,75 @@ const ScheduleApproval = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [hasPermission, currentMonth, currentYear, isAdmin, selectedSupplierId]);
 
-    // Load lần đầu + khi đổi tháng/năm
+    // Load danh sách suppliers khi là ADMIN
+    useEffect(() => {
+        if (!hasPermission || !isAdmin) return;
+        const fetchSuppliers = async () => {
+            try {
+                const res = await employeeApi.getSuppliersPositions();
+                const suppliersData = res.data?.suppliers || [];
+                // Chỉ lấy suppliers đang active
+                setSuppliers(suppliersData.filter((s: any) => s.status === true));
+            } catch (error) {
+                console.error("Failed to load suppliers for ScheduleApproval", error);
+            }
+        };
+        fetchSuppliers();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [hasPermission, isAdmin]);
+
+    // Set default supplier cho ADMIN khi đã load suppliers
+    useEffect(() => {
+        if (isAdmin && suppliers.length > 0 && selectedSupplierId === undefined) {
+            setSelectedSupplierId(suppliers[0].id);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [suppliers, isAdmin]);
+
+    // Khi thay đổi tháng/năm hoặc supplierId (ADMIN) thì reload danh sách phê duyệt
     useEffect(() => {
         if (!hasPermission) return;
         loadApprovalData();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [currentMonth, currentYear, hasPermission]);
+    }, [currentMonth, currentYear, selectedSupplierId, hasPermission, loadApprovalData]);
 
-    // Realtime SSE nhận thông báo phê duyệt mới
+    // Auto reload danh sách phê duyệt sau 5 phút không có tương tác
     useEffect(() => {
-        if (!hasPermission) return;
+        const INACTIVITY_MS = 5 * 60 * 1000;
 
-        const token = tokenService.getAccessToken();
-        if (!token) {
-            console.warn("⚠️ No access token found, skipping SSE connection in ScheduleApproval");
-            return;
-        }
-
-        const baseUrl = import.meta.env.VITE_API_BASE_URL?.replace(/\/+$/, "") || "";
-        const streamUrl = `${baseUrl}/realtime/history-schudule/stream`;
-
-        let es: EventSourcePolyfill | null = null;
-        let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
-        let reconnectAttempts = 0;
-        const maxReconnectAttempts = 5;
-        const reconnectDelay = 3000; // 3 seconds
-
-        const connectSSE = () => {
-            // Kiểm tra token lại trước khi kết nối
-            const currentToken = tokenService.getAccessToken();
-            if (!currentToken) {
-                console.warn("⚠️ Token expired, stopping SSE reconnection attempts in ScheduleApproval");
-                return;
+        const resetInactivityTimer = () => {
+            if (inactivityTimeoutRef.current !== null) {
+                window.clearTimeout(inactivityTimeoutRef.current);
             }
-
-            try {
-                es = new EventSourcePolyfill(streamUrl, {
-                    headers: {
-                        Authorization: `Bearer ${currentToken}`,
-                    },
-                });
-
-                es.addEventListener("connected", (event: MessageEvent) => {
-                    console.log("✅ Connected to history schedule stream:", event.data);
-                    reconnectAttempts = 0; // Reset counter on successful connection
-                });
-
-                es.addEventListener("newHistorySchudule", (event: MessageEvent) => {
-                    try {
-                        const item = JSON.parse(event.data); // 1 HistorySchuduleResponse
-                        if (!item) return;
-
-                        // Xác định ngày của bản ghi mới (ưu tiên dateRequest, fallback createdAt)
-                        const rawDate = item?.dateRequest || item?.createdAt;
-                        if (!rawDate) return;
-
-                        const d = new Date(rawDate);
-                        if (isNaN(d.getTime())) return;
-
-                        const month = d.getMonth();
-                        const year = d.getFullYear();
-
-                        // Chỉ cập nhật khi đúng tháng/năm đang xem
-                        if (month !== currentMonth || year !== currentYear) return;
-
-                        setApprovalData((prev) => {
-                            if (!Array.isArray(prev) || prev.length === 0) {
-                                return [item];
-                            }
-
-                            const existsIndex = prev.findIndex((x: any) => x?.id === item?.id);
-
-                            // Nếu đã tồn tại id -> cập nhật phần tử đó
-                            if (existsIndex !== -1) {
-                                const clone = [...prev];
-                                clone[existsIndex] = item;
-                                return clone;
-                            }
-
-                            // Nếu chưa có -> thêm mới lên đầu danh sách
-                            return [item, ...prev];
-                        });
-                    } catch (err) {
-                        console.error("❌ Error handling newHistorySchudule event", err);
-                    }
-                });
-
-                // Event khi một history bị xoá khỏi danh sách chờ duyệt
-                es.addEventListener("deleteHistorySchudule", (event: MessageEvent) => {
-                    try {
-                        // Backend gửi Integer, có thể là "123" hoặc JSON "123"
-                        const raw = event.data;
-                        const parsed = (() => {
-                            try {
-                                return JSON.parse(raw);
-                            } catch {
-                                return Number(raw);
-                            }
-                        })();
-
-                        const deletedId = Number(parsed);
-                        if (!deletedId || Number.isNaN(deletedId)) return;
-
-                        setApprovalData((prev) =>
-                            Array.isArray(prev) ? prev.filter((item: any) => item?.id !== deletedId) : prev
-                        );
-                    } catch (err) {
-                        console.error("❌ Error handling deleteHistorySchudule event", err);
-                    }
-                });
-
-                es.onerror = (err: any) => {
-                    const errorStatus = err?.status || err?.target?.status;
-
-                    if (errorStatus === 401) {
-                        console.warn("⚠️ SSE 401 Unauthorized in ScheduleApproval - Token may be expired");
-                        // Không reconnect nếu là lỗi 401, có thể token đã hết hạn
-                        if (es) {
-                            es.close();
-                            es = null;
-                        }
-                    } else {
-                        // Các lỗi khác (network, timeout) thì thử reconnect
-                        if (reconnectAttempts < maxReconnectAttempts) {
-                            reconnectAttempts++;
-                            console.warn(`⚠️ SSE error in ScheduleApproval (attempt ${reconnectAttempts}/${maxReconnectAttempts}, will retry in ${reconnectDelay}ms):`, err);
-
-                            if (es) {
-                                es.close();
-                                es = null;
-                            }
-
-                            reconnectTimeout = setTimeout(() => {
-                                connectSSE();
-                            }, reconnectDelay);
-                        } else {
-                            console.error("❌ Max reconnect attempts reached for ScheduleApproval SSE");
-                            if (es) {
-                                es.close();
-                                es = null;
-                            }
-                        }
-                    }
-                };
-            } catch (error) {
-                console.error("❌ Error creating SSE connection in ScheduleApproval:", error);
-            }
+            inactivityTimeoutRef.current = window.setTimeout(() => {
+                loadApprovalData();
+            }, INACTIVITY_MS);
         };
 
-        // Kết nối lần đầu
-        connectSSE();
+        const handleActivity = () => {
+            resetInactivityTimer();
+        };
+
+        window.addEventListener("click", handleActivity);
+        window.addEventListener("keydown", handleActivity);
+        window.addEventListener("mousemove", handleActivity);
+        window.addEventListener("scroll", handleActivity);
+
+        resetInactivityTimer();
 
         return () => {
-            if (reconnectTimeout) {
-                clearTimeout(reconnectTimeout);
+            if (inactivityTimeoutRef.current !== null) {
+                window.clearTimeout(inactivityTimeoutRef.current);
             }
-            if (es) {
-                es.close();
-            }
+            window.removeEventListener("click", handleActivity);
+            window.removeEventListener("keydown", handleActivity);
+            window.removeEventListener("mousemove", handleActivity);
+            window.removeEventListener("scroll", handleActivity);
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [hasPermission, currentMonth, currentYear]);
+    }, [loadApprovalData]);
+
+    // Đã bỏ realtime SSE vì backend không còn hỗ trợ
 
     const handlePrevMonth = () => {
         setCurrentDate((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
@@ -256,7 +182,8 @@ const ScheduleApproval = () => {
             // Reload danh sách sau khi phê duyệt thành công
             const month = currentMonth + 1;
             const year = currentYear;
-            const res = await scheduleApi.getHistory(month, year);
+            const supplierIdForApi = isAdmin ? selectedSupplierId : undefined;
+            const res = await scheduleApi.getHistory(month, year, supplierIdForApi);
             const payload = Array.isArray(res.data) ? res.data : res.data?.data;
             setApprovalData(payload ?? []);
         } catch (error: any) {
@@ -298,7 +225,8 @@ const ScheduleApproval = () => {
             // Reload danh sách sau khi từ chối thành công
             const month = currentMonth + 1;
             const year = currentYear;
-            const res = await scheduleApi.getHistory(month, year);
+            const supplierIdForApi = isAdmin ? selectedSupplierId : undefined;
+            const res = await scheduleApi.getHistory(month, year, supplierIdForApi);
             const payload = Array.isArray(res.data) ? res.data : res.data?.data;
             setApprovalData(payload ?? []);
 
@@ -346,48 +274,70 @@ const ScheduleApproval = () => {
                         Xem và phê duyệt các yêu cầu đăng ký, bổ sung hoặc xóa ca làm việc.
                     </p>
                 </div>
-                <div className="flex items-center gap-4">
-                    <div className="flex items-center rounded-lg border border-[#dbdfe6] dark:border-[#4b5563] overflow-hidden">
-                        <button
-                            type="button"
-                            onClick={handlePrevMonth}
-                            className="p-1.5 hover:bg-background-light dark:hover:bg-[#374151] text-[#616f89] dark:text-[#9ca3af]"
+                <div className="flex flex-wrap items-center gap-4">
+                    {/* Chọn Supplier (chỉ hiển thị cho ADMIN) */}
+                    {isAdmin && (
+                        <div className="flex items-center gap-2">
+                            <span className="text-sm text-[#616f89] dark:text-[#9ca3af]">Supplier:</span>
+                            <select
+                                value={selectedSupplierId || (suppliers.length > 0 ? suppliers[0].id : "")}
+                                onChange={(e) => {
+                                    const value = Number(e.target.value);
+                                    setSelectedSupplierId(Number.isNaN(value) ? undefined : value);
+                                }}
+                                className="px-3 py-2 border border-[#dbdfe6] dark:border-[#4b5563] rounded-lg bg-white dark:bg-[#111827] text-[#111318] dark:text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 min-w-[180px]"
+                            >
+                                {suppliers.map((supplier) => (
+                                    <option key={supplier.id} value={supplier.id}>
+                                        {supplier.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
+                    <div className="flex items-center gap-3">
+                        <div className="flex items-center rounded-lg border border-[#dbdfe6] dark:border-[#4b5563] overflow-hidden">
+                            <button
+                                type="button"
+                                onClick={handlePrevMonth}
+                                className="p-1.5 hover:bg-background-light dark:hover:bg-[#374151] text-[#616f89] dark:text-[#9ca3af]"
+                            >
+                                <span className="material-symbols-outlined text-[20px]">chevron_left</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleNextMonth}
+                                className="p-1.5 hover:bg-background-light dark:hover:bg-[#374151] text-[#616f89] dark:text-[#9ca3af] border-l border-[#dbdfe6] dark:border-[#4b5563]"
+                            >
+                                <span className="material-symbols-outlined text-[20px]">chevron_right</span>
+                            </button>
+                        </div>
+                        <select
+                            value={currentMonth}
+                            onChange={handleChangeMonth}
+                            className="px-3 py-2 border border-[#dbdfe6] dark:border-[#4b5563] rounded-lg bg-white dark:bg-[#111827] text-[#111318] dark:text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
                         >
-                            <span className="material-symbols-outlined text-[20px]">chevron_left</span>
-                        </button>
-                        <button
-                            type="button"
-                            onClick={handleNextMonth}
-                            className="p-1.5 hover:bg-background-light dark:hover:bg-[#374151] text-[#616f89] dark:text-[#9ca3af] border-l border-[#dbdfe6] dark:border-[#4b5563]"
-                        >
-                            <span className="material-symbols-outlined text-[20px]">chevron_right</span>
-                        </button>
-                    </div>
-                    <select
-                        value={currentMonth}
-                        onChange={handleChangeMonth}
-                        className="px-3 py-2 border border-[#dbdfe6] dark:border-[#4b5563] rounded-lg bg-white dark:bg-[#111827] text-[#111318] dark:text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    >
-                        {Array.from({ length: 12 }).map((_, index) => (
-                            <option key={index} value={index}>
-                                Tháng {index + 1}
-                            </option>
-                        ))}
-                    </select>
-                    <select
-                        value={currentYear}
-                        onChange={handleChangeYear}
-                        className="px-3 py-2 border border-[#dbdfe6] dark:border-[#4b5563] rounded-lg bg-white dark:bg-[#111827] text-[#111318] dark:text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    >
-                        {Array.from({ length: 7 }).map((_, index) => {
-                            const year = today.getFullYear() - 3 + index;
-                            return (
-                                <option key={year} value={year}>
-                                    {year}
+                            {Array.from({ length: 12 }).map((_, index) => (
+                                <option key={index} value={index}>
+                                    Tháng {index + 1}
                                 </option>
-                            );
-                        })}
-                    </select>
+                            ))}
+                        </select>
+                        <select
+                            value={currentYear}
+                            onChange={handleChangeYear}
+                            className="px-3 py-2 border border-[#dbdfe6] dark:border-[#4b5563] rounded-lg bg-white dark:bg-[#111827] text-[#111318] dark:text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        >
+                            {Array.from({ length: 7 }).map((_, index) => {
+                                const year = today.getFullYear() - 3 + index;
+                                return (
+                                    <option key={year} value={year}>
+                                        {year}
+                                    </option>
+                                );
+                            })}
+                        </select>
+                    </div>
                 </div>
             </div>
 

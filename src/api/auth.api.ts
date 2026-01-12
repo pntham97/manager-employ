@@ -43,4 +43,9 @@ export const authApi = {
             }
         );
     },
+
+    // Force logout một user theo userId (ADMIN: mọi user, MANAGER: chỉ nhân viên cùng supplier)
+    forceLogout(userId: string): Promise<ApiResponse<any>> {
+        return axiosClient.post(`/auth/force-logout/${userId}`);
+    },
 };

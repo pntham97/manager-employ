@@ -155,8 +155,13 @@ const Calendar = () => {
                 : [];
 
         // Nếu ngày này đã đăng ký ca, chỉ hiển thị loại ca đã đăng ký
+        // registeredIds chứa danh sách shiftTypeId đã đăng ký cho ngày đó,
+        // nên cần so sánh với item.shiftType.id (không phải item.id)
         if (registeredIds.size > 0) {
-            filtered = filtered.filter((item: any) => registeredIds.has(item?.id));
+            filtered = filtered.filter((item: any) => {
+                const shiftTypeId = item?.shiftType?.id ?? item?.shiftTypeId;
+                return shiftTypeId && registeredIds.has(shiftTypeId);
+            });
         }
 
         setAvailableShiftTypes(filtered);

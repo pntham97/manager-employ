@@ -1,8 +1,8 @@
-import { useEffect, useState, useRef, useMemo } from "react";
+import { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { EventSourcePolyfill } from "event-source-polyfill";
-import { employeeApi, type EmployeeResponse, type PageResponse, type EmployeeStatusEvent, type Company } from "../api/employee.api";
-import { tokenService } from "../utils/token";
+import { employeeApi, type EmployeeResponse, type PageResponse, type Company } from "../api/employee.api";
+import { authApi } from "../api/auth.api";
+import { message } from "antd";
 import { exportEmployeesToExcel } from "../utils/exportEmploys";
 
 interface Supplier {
@@ -38,6 +38,7 @@ const ManagerEmploy = () => {
     const searchInputRef = useRef<HTMLInputElement | null>(null);
     const lastQueryKeyRef = useRef<string>("");
     const abortRef = useRef<AbortController | null>(null);
+    const inactivityTimeoutRef = useRef<number | null>(null);
 
     // Format ngày tháng
     const formatDate = (dateString: string) => {
@@ -250,128 +251,110 @@ const ManagerEmploy = () => {
     // Gọi API khi component mount hoặc page/size/employeeName/selectedSupplierId thay đổi
     useEffect(() => {
         fetchEmployees(page, size, employeeName || undefined, selectedSupplierId, selectedCompanyId);
-    }, [page, size, employeeName]);
+    }, [page, size, employeeName, selectedSupplierId, selectedCompanyId]);
+
+    // Hàm reload list dựa trên tham số hiện tại (phục vụ auto refresh khi inactivity)
+    const reloadEmployees = useCallback(() => {
+        fetchEmployees(page, size, employeeName || undefined, selectedSupplierId, selectedCompanyId);
+    }, [page, size, employeeName, selectedSupplierId, selectedCompanyId]);
+
+    // Auto reload sau 5 phút không có tương tác
+    useEffect(() => {
+        const INACTIVITY_MS = 5 * 60 * 1000;
+
+        const resetInactivityTimer = () => {
+            if (inactivityTimeoutRef.current !== null) {
+                window.clearTimeout(inactivityTimeoutRef.current);
+            }
+            inactivityTimeoutRef.current = window.setTimeout(() => {
+                reloadEmployees();
+            }, INACTIVITY_MS);
+        };
+
+        const handleActivity = () => {
+            resetInactivityTimer();
+        };
+
+        window.addEventListener("click", handleActivity);
+        window.addEventListener("keydown", handleActivity);
+        window.addEventListener("mousemove", handleActivity);
+        window.addEventListener("scroll", handleActivity);
+
+        // Khởi tạo timer ban đầu
+        resetInactivityTimer();
+
+        return () => {
+            if (inactivityTimeoutRef.current !== null) {
+                window.clearTimeout(inactivityTimeoutRef.current);
+            }
+            window.removeEventListener("click", handleActivity);
+            window.removeEventListener("keydown", handleActivity);
+            window.removeEventListener("mousemove", handleActivity);
+            window.removeEventListener("scroll", handleActivity);
+        };
+    }, [reloadEmployees]);
     const displayedSuppliers = useMemo(() => {
         return selectedCompanyId
             ? suppliers.filter((s) => s.companyId === selectedCompanyId)
             : suppliers;
     }, [selectedCompanyId, suppliers]);
 
+    const [forceLogoutUserId, setForceLogoutUserId] = useState<string | null>(null);
+
     const handleSearchCompanyOrSuplior = () => {
         const value = searchInputRef.current?.value || "";
         setEmployeeName(value);
         fetchEmployees(page, size, employeeName || undefined, selectedSupplierId, selectedCompanyId);
-    }
-    // Realtime SSE nhận thông báo cập nhật trạng thái online/offline của nhân viên
-    useEffect(() => {
-        const token = tokenService.getAccessToken();
-        if (!token) {
-            console.warn("⚠️ No access token found, skipping SSE connection");
+    };
+
+    // Gọi API force-logout cho 1 nhân viên
+    const handleForceLogoutEmployee = async (employee: EmployeeResponse) => {
+        if (!employee?.userId) {
+            message.warning("Không tìm thấy userId của nhân viên, không thể đăng xuất.");
             return;
         }
 
-        const baseUrl = import.meta.env.VITE_API_BASE_URL?.replace(/\/+$/, "") || "";
-        const streamUrl = `${baseUrl}/realtime/employee-status/stream`;
+        const ok = window.confirm(`Bạn có chắc muốn đăng xuất tất cả thiết bị của nhân viên "${employee.name}"?`);
+        if (!ok) return;
 
-        let es: EventSourcePolyfill | null = null;
-        let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
-        let reconnectAttempts = 0;
-        const maxReconnectAttempts = 5;
-        const reconnectDelay = 3000; // 3 seconds
+        try {
+            setForceLogoutUserId(employee.userId);
+            await authApi.forceLogout(employee.userId);
 
-        const connectSSE = () => {
-            // Kiểm tra token lại trước khi kết nối
-            const currentToken = tokenService.getAccessToken();
-            if (!currentToken) {
-                console.warn("⚠️ Token expired, stopping SSE reconnection attempts");
-                return;
-            }
-
-            try {
-                es = new EventSourcePolyfill(streamUrl, {
-                    headers: {
-                        Authorization: `Bearer ${currentToken}`,
-                    },
-                });
-
-                es.addEventListener("connected", (event: MessageEvent) => {
-                    console.log("✅ Connected to employee status stream:", event.data);
-                    reconnectAttempts = 0; // Reset counter on successful connection
-                });
-
-                es.addEventListener("employeeStatus", (event: MessageEvent) => {
-                    try {
-                        const statusData: EmployeeStatusEvent = JSON.parse(event.data);
-                        console.log("📢 Received employee status update:", statusData);
-
-                        // Cập nhật trạng thái của nhân viên trong danh sách
-                        setEmployees((prevEmployees) => {
-                            return prevEmployees.map((emp) => {
-                                if (emp.employeeId === statusData.employeeId) {
-                                    return {
-                                        ...emp,
-                                        online: statusData.isOnline,
-                                        lastOfflineAt: statusData.lastOfflineAt || "",
-                                    };
-                                }
-                                return emp;
-                            });
-                        });
-                    } catch (err) {
-                        console.error("❌ Error handling employeeStatus event:", err);
-                    }
-                });
-
-                es.onerror = (err: any) => {
-                    const errorStatus = err?.status || err?.target?.status;
-
-                    if (errorStatus === 401) {
-                        console.warn("⚠️ SSE 401 Unauthorized - Token may be expired");
-                        // Không reconnect nếu là lỗi 401, có thể token đã hết hạn
-                        if (es) {
-                            es.close();
-                            es = null;
+            // Cập nhật trạng thái employee về Offline ngay trên UI
+            const now = new Date().toISOString();
+            setEmployees((prev) =>
+                prev.map((e) =>
+                    e.employeeId === employee.employeeId
+                        ? {
+                            ...e,
+                            online: false,
+                            lastOfflineAt: now,
                         }
-                    } else {
-                        // Các lỗi khác (network, timeout) thì thử reconnect
-                        if (reconnectAttempts < maxReconnectAttempts) {
-                            reconnectAttempts++;
-                            console.warn(`⚠️ SSE error in employee status stream (attempt ${reconnectAttempts}/${maxReconnectAttempts}, will retry in ${reconnectDelay}ms):`, err);
+                        : e
+                )
+            );
 
-                            if (es) {
-                                es.close();
-                                es = null;
-                            }
+            message.success(`Đã đăng xuất thành công nhân viên "${employee.name}".`);
+        } catch (error: any) {
+            const status = error?.response?.status;
+            const backendMessage = error?.response?.data?.message;
 
-                            reconnectTimeout = setTimeout(() => {
-                                connectSSE();
-                            }, reconnectDelay);
-                        } else {
-                            console.error("❌ Max reconnect attempts reached for employee status stream");
-                            if (es) {
-                                es.close();
-                                es = null;
-                            }
-                        }
-                    }
-                };
-            } catch (error) {
-                console.error("❌ Error creating SSE connection:", error);
+            if (status === 403) {
+                message.error(backendMessage || "Bạn không có quyền đăng xuất nhân viên này (khác supplier).");
+            } else {
+                message.error(backendMessage || "Đăng xuất nhân viên thất bại. Vui lòng thử lại.");
             }
-        };
 
-        // Kết nối lần đầu
-        connectSSE();
-
-        return () => {
-            if (reconnectTimeout) {
-                clearTimeout(reconnectTimeout);
-            }
-            if (es) {
-                es.close();
-            }
-        };
-    }, []);
+            console.error("❌ [API ERROR] force-logout employee:", {
+                userId: employee.userId,
+                status,
+                error: error?.response?.data || error?.message,
+            });
+        } finally {
+            setForceLogoutUserId(null);
+        }
+    };
 
     // Xử lý chuyển trang
     const handlePageChange = (newPage: number) => {
@@ -778,12 +761,28 @@ const ManagerEmploy = () => {
                                                     {formatPhoneNumber(employee.phone)}
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                    <button
-                                                        onClick={() => navigate("/EmployDetail", { state: { employee } })}
-                                                        className="text-text-secondary-light dark:text-text-secondary-dark hover:text-[white] transition-colors p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
-                                                    >
-                                                        <span className="material-icons-outlined">more_vert</span>
-                                                    </button>
+                                                    <div className="flex items-center justify-end gap-2">
+                                                        {employee.online && (
+                                                            <button
+                                                                onClick={() => handleForceLogoutEmployee(employee)}
+                                                                disabled={forceLogoutUserId === employee.userId}
+                                                                className={`inline-flex items-center px-3 py-1.5 rounded-md text-[11px] font-medium border transition-colors
+                                                                    ${forceLogoutUserId === employee.userId
+                                                                        ? "bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 border-border-light dark:border-border-dark cursor-not-allowed"
+                                                                        : "bg-white dark:bg-gray-900 text-red-600 dark:text-red-400 border-red-200 dark:border-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                                                                    }`}
+                                                            >
+                                                                <span className="material-icons-outlined text-sm mr-1">logout</span>
+                                                                {forceLogoutUserId === employee.userId ? "Đang đăng xuất..." : "Đăng xuất"}
+                                                            </button>
+                                                        )}
+                                                        <button
+                                                            onClick={() => navigate("/EmployDetail", { state: { employee } })}
+                                                            className="text-text-secondary-light dark:text-text-secondary-dark hover:text-[white] transition-colors p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
+                                                        >
+                                                            <span className="material-icons-outlined">more_vert</span>
+                                                        </button>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         ))

@@ -6,6 +6,8 @@ export interface CreateSchedulePayload {
     detailShiftTypeId: number;
     registrationDate: string;
     dateRequest?: string;
+    // Tuỳ chọn: ADMIN/MANAGER có thể truyền employeeId để đăng ký ca cho nhân viên khác
+    employeeId?: number;
 }
 
 export const scheduleApi = {
@@ -33,9 +35,14 @@ export const scheduleApi = {
         return axiosClient.delete(`/schedule/${id}`);
     },
 
-    getHistory(month: number, year: number): Promise<ApiResponse<any>> {
+    getHistory(month: number, year: number, supplierId?: number): Promise<ApiResponse<any>> {
+        const params: { month: number; year: number; supplierId?: number } = { month, year };
+        // Backend: nếu role ADMIN có thể truyền thêm supplierId để lọc theo supplier
+        if (supplierId !== undefined) {
+            params.supplierId = supplierId;
+        }
         return axiosClient.get("/schedule/history", {
-            params: { month, year },
+            params,
         });
     },
 

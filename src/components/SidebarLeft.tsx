@@ -1,17 +1,16 @@
 import React, { useEffect, useState } from "react";
-import { Home, Archive, ChevronRight, ChevronDown, Settings, Users, Truck, ScrollTextIcon, Calendar, CheckCircle } from "lucide-react";
+import { Home, Archive, ScrollTextIcon, Calendar, CheckCircle, Settings } from "lucide-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 // import logo from "../assets/images/logo.png";
 import { User, LogOut, Key, X } from "lucide-react";
 import { authApi } from "../api/auth.api";
 import { message } from "antd";
-import { EventSourcePolyfill } from "event-source-polyfill";
 import { tokenService } from "../utils/token";
 
 const SidebarLeft: React.FC = () => {
     const location = useLocation();
-    const [openPartner, setOpenPartner] = useState(false);
-    const [collapsed, setCollapsed] = useState(false);
+    const [openPartner] = useState(false);
+    const [collapsed] = useState(false);
     const [showProfileModal, setShowProfileModal] = useState(false);
     const [showPasswordModal, setShowPasswordModal] = useState(false);
 
@@ -62,119 +61,7 @@ const SidebarLeft: React.FC = () => {
         }
     }, [location.pathname]);
 
-    // Realtime SSE nhận thông báo yêu cầu phê duyệt mới
-    useEffect(() => {
-        if (!hasPermission) return;
-
-        const token = tokenService.getAccessToken();
-        if (!token) {
-            console.warn("⚠️ No access token found, skipping SSE connection in Sidebar");
-            return;
-        }
-
-        const baseUrl = import.meta.env.VITE_API_BASE_URL?.replace(/\/+$/, "") || "";
-        const streamUrl = `${baseUrl}/realtime/history-schudule/stream`;
-
-        let es: EventSourcePolyfill | null = null;
-        let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
-        let reconnectAttempts = 0;
-        const maxReconnectAttempts = 5;
-        const reconnectDelay = 3000; // 3 seconds
-
-        const connectSSE = () => {
-            // Kiểm tra token lại trước khi kết nối
-            const currentToken = tokenService.getAccessToken();
-            if (!currentToken) {
-                console.warn("⚠️ Token expired, stopping SSE reconnection attempts in Sidebar");
-                return;
-            }
-
-            try {
-                es = new EventSourcePolyfill(streamUrl, {
-                    headers: {
-                        Authorization: `Bearer ${currentToken}`,
-                    },
-                });
-
-                es.addEventListener("connected", (event: MessageEvent) => {
-                    console.log("✅ Connected to history schedule stream in Sidebar:", event.data);
-                    reconnectAttempts = 0; // Reset counter on successful connection
-                });
-
-                es.addEventListener("newHistorySchudule", (event: MessageEvent) => {
-                    try {
-                        const item = JSON.parse(event.data);
-                        if (!item) return;
-
-                        // Chỉ tăng badge nếu không đang ở trang ScheduleApproval
-                        if (location.pathname !== "/ScheduleApproval") {
-                            setPendingApprovalCount((prev) => prev + 1);
-                        }
-                    } catch (err) {
-                        console.error("❌ Error handling newHistorySchudule event in Sidebar", err);
-                    }
-                });
-
-                es.addEventListener("deleteHistorySchudule", () => {
-                    try {
-                        // Khi có yêu cầu bị xóa (đã duyệt/từ chối), không cần giảm badge
-                        // vì badge chỉ đếm số yêu cầu mới đến
-                    } catch (err) {
-                        console.error("❌ Error handling deleteHistorySchudule event in Sidebar", err);
-                    }
-                });
-
-                es.onerror = (err: any) => {
-                    const errorStatus = err?.status || err?.target?.status;
-
-                    if (errorStatus === 401) {
-                        console.warn("⚠️ SSE 401 Unauthorized in Sidebar - Token may be expired");
-                        // Không reconnect nếu là lỗi 401, có thể token đã hết hạn
-                        if (es) {
-                            es.close();
-                            es = null;
-                        }
-                    } else {
-                        // Các lỗi khác (network, timeout) thì thử reconnect
-                        if (reconnectAttempts < maxReconnectAttempts) {
-                            reconnectAttempts++;
-                            console.warn(`⚠️ SSE error in Sidebar (attempt ${reconnectAttempts}/${maxReconnectAttempts}, will retry in ${reconnectDelay}ms):`, err);
-
-                            if (es) {
-                                es.close();
-                                es = null;
-                            }
-
-                            reconnectTimeout = setTimeout(() => {
-                                connectSSE();
-                            }, reconnectDelay);
-                        } else {
-                            console.error("❌ Max reconnect attempts reached for Sidebar SSE");
-                            if (es) {
-                                es.close();
-                                es = null;
-                            }
-                        }
-                    }
-                };
-            } catch (error) {
-                console.error("❌ Error creating SSE connection in Sidebar:", error);
-            }
-        };
-
-        // Kết nối lần đầu
-        connectSSE();
-
-        return () => {
-            if (reconnectTimeout) {
-                clearTimeout(reconnectTimeout);
-            }
-            if (es) {
-                es.close();
-            }
-        };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [hasPermission, location.pathname]);
+    // Đã bỏ SSE realtime cho badge phê duyệt vì backend không còn hỗ trợ
 
     // 👉 class cho menu chính
     const navItemClass = ({ isActive }: { isActive: boolean }) =>
@@ -184,7 +71,7 @@ const SidebarLeft: React.FC = () => {
             : "text-gray-600 hover:bg-blue-50 hover:text-blue-600"
         }`;
 
-    const isPartnerActive = location.pathname.startsWith("/partners");
+    // const isPartnerActive = location.pathname.startsWith("/partners");
 
 
     const validateForm = () => {
