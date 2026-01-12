@@ -4,6 +4,13 @@ import { scheduleApi } from "../api/schedule.api";
 import { shiftTypeSupplierApi } from "../api/shiftTypeSupplier.api";
 import { employeeApi, type EmployeeResponse } from "../api/employee.api";
 
+interface RegisterDetail {
+    id: number;
+    name: string;
+    startAt: string;
+    endAt: string;
+    registeredEmployeeNames: string[];
+}
 const ScheduleManagement = () => {
     const today = new Date();
     const [currentDate, setCurrentDate] = useState(
@@ -12,6 +19,7 @@ const ScheduleManagement = () => {
     const [scheduleData, setScheduleData] = useState<any[]>([]);
     const [shiftTypeData, setShiftTypeData] = useState<any[]>([]);
     const [suppliers, setSuppliers] = useState<Array<{ id: number; name: string; status: boolean }>>([]);
+    const [maxDetailShiftCount, setMaxDetailShiftCount] = useState<number>(0);
     const [loading, setLoading] = useState(false);
     const [errorModal, setErrorModal] = useState<{
         show: boolean;
@@ -43,9 +51,10 @@ const ScheduleManagement = () => {
     const [registerModal, setRegisterModal] = useState<{
         show: boolean;
         day: number;
-        details: Array<{ id: number; name: string; startAt: string; endAt: string }>;
+        details: RegisterDetail[]; // 🔥 DÙNG TYPE MỚI
         selectedDetailId: number | null;
-        employees: Array<{ id: number; name: string }>;
+        employees: { id: number; name: string }[];
+        filteredEmployees: { id: number; name: string }[];
         selectedEmployeeId: number | null;
     }>({
         show: false,
@@ -53,6 +62,7 @@ const ScheduleManagement = () => {
         details: [],
         selectedDetailId: null,
         employees: [],
+        filteredEmployees: [],
         selectedEmployeeId: null,
     });
 
@@ -157,7 +167,6 @@ const ScheduleManagement = () => {
 
             const res = await scheduleApi.getAdminManagerSchedule(month, year, supplierIdForApi);
             const payload = Array.isArray(res.data) ? res.data : res.data?.data;
-            console.log(payload);
             setScheduleData(payload ?? []);
         } catch (error: any) {
             console.error("Failed to load schedule data", error);
@@ -343,15 +352,17 @@ const ScheduleManagement = () => {
         return targetOnly < todayOnly;
     };
 
-    // Mở modal đăng ký ca cho ngày + loại ca đang chọn
-    const openRegisterModalForDay = async (day: number) => {
+    const openRegisterModalForDay = async (day: number, scheduleInfo: any[]) => {
         if (selectedShiftTypeId === null) {
             window.alert("Vui lòng chọn loại ca ở phía trên trước khi đăng ký ca.");
             return;
         }
 
-        // Xác định supplierId cho API (ADMIN dùng selectedSupplierId, MANAGER lấy từ localStorage.employee)
-        let supplierIdForApi: number | undefined = undefined;
+        /* =======================
+           Xác định supplierId
+        ======================= */
+        let supplierIdForApi: number | undefined;
+
         if (isAdmin) {
             if (!selectedSupplierId) {
                 window.alert("Vui lòng chọn Supplier trước khi đăng ký ca.");
@@ -361,80 +372,106 @@ const ScheduleManagement = () => {
         } else {
             const employeeStr = localStorage.getItem("employee");
             if (!employeeStr) {
-                window.alert("Không tìm thấy thông tin employee trong localStorage.");
+                window.alert("Không tìm thấy thông tin employee.");
                 return;
             }
-            try {
-                const employee = JSON.parse(employeeStr);
-                supplierIdForApi = employee?.supplierId;
-            } catch {
-                window.alert("Lỗi đọc thông tin employee từ localStorage.");
-                return;
-            }
+            supplierIdForApi = JSON.parse(employeeStr)?.supplierId;
         }
 
         if (!supplierIdForApi) {
-            window.alert("Không xác định được supplierId để đăng ký ca.");
+            window.alert("Không xác định được supplierId.");
             return;
         }
 
-        const targetDate = new Date(currentYear, currentMonth, day);
-
-        // Lấy danh sách detailShiftType khả dụng cho ngày + loại ca hiện tại
-        const details: Array<{ id: number; name: string; startAt: string; endAt: string }> = [];
-        shiftTypeData.forEach((item: any) => {
-            const shiftType = item?.shiftType;
-            if (!shiftType) return;
-            if (shiftType.id !== selectedShiftTypeId) return;
-            if (!isShiftTypeActiveOnDate(item, targetDate)) return;
-
-            const st = shiftType;
-            const list = st?.listDetailShiftType ?? item?.listDetailShiftType ?? [];
-
-            if (Array.isArray(list)) {
-                list.forEach((d: any) => {
-                    const id = d?.id;
-                    if (!id) return;
-                    if (!details.some((x) => x.id === id)) {
-                        details.push({
-                            id,
-                            name: d?.name ?? "Ca",
-                            startAt: d?.startAt ?? "",
-                            endAt: d?.endAt ?? "",
-                        });
-                    }
-                });
-            }
-        });
-
-        if (details.length === 0) {
-            window.alert("Không tìm thấy ca chi tiết nào khả dụng cho loại ca và ngày đã chọn.");
-            return;
-        }
-
-        // Lấy danh sách nhân viên theo supplier (dùng API GET /employee/list)
         try {
+            /* =======================
+               Load danh sách nhân viên
+            ======================= */
             const res = await employeeApi.getList(0, 1000, undefined, supplierIdForApi);
             const pageData = res.data?.data ?? res.data;
             const employeeContent = pageData?.content ?? pageData ?? [];
-            const employees = (Array.isArray(employeeContent) ? employeeContent : []) as EmployeeResponse[];
 
+            const employees = employeeContent as EmployeeResponse[];
+
+            const modalEmployees = employees.map(e => ({
+                id: e.employeeId,
+                name: e.name,
+            }));
+
+            /* =======================
+               Build danh sách CA KHẢ DỤNG
+            ======================= */
+            const availableDetails: RegisterDetail[] = [];
+
+            shiftTypeData.forEach((item: any) => {
+                const shiftType = item?.shiftType;
+                if (!shiftType) return;
+                if (shiftType.id !== selectedShiftTypeId) return;
+                if (!isShiftTypeActiveOnDate(item, new Date(buildRegistrationDate(day)))) return;
+
+                const list = shiftType.listDetailShiftType ?? [];
+
+                list.forEach((d: any) => {
+                    if (!availableDetails.some(x => x.id === d.id)) {
+                        availableDetails.push({
+                            id: d.id,
+                            name: d.name,
+                            startAt: d.startAt,
+                            endAt: d.endAt,
+                            registeredEmployeeNames: [],
+                        });
+                    }
+                });
+            });
+
+            if (availableDetails.length === 0) {
+                window.alert("Không tìm thấy ca chi tiết khả dụng.");
+                return;
+            }
+
+            /* =======================
+               Gắn nhân viên đã đăng ký từ scheduleInfo
+            ======================= */
+            availableDetails.forEach(detail => {
+                const matched = scheduleInfo.find(
+                    s => s?.isDetail && s.detailShiftTypeId === detail.id
+                );
+
+                detail.registeredEmployeeNames = (matched?.employeeNames || []).map(
+                    (n: string) => n.trim().toLowerCase()
+                );
+            });
+
+            /* =======================
+               Filter cho ca đầu tiên
+            ======================= */
+            const firstDetail = availableDetails[0];
+
+            const filteredEmployees = modalEmployees.filter(
+                e => !firstDetail.registeredEmployeeNames.includes(
+                    e.name.trim().toLowerCase()
+                )
+            );
+
+            /* =======================
+               Open modal
+            ======================= */
             setRegisterModal({
                 show: true,
                 day,
-                details,
-                selectedDetailId: details[0]?.id ?? null,
-                employees: employees.map((e) => ({
-                    id: e.employeeId,
-                    name: e.name,
-                })),
-                selectedEmployeeId: employees[0]?.employeeId ?? null,
+                details: availableDetails,
+                selectedDetailId: firstDetail.id,
+                employees: modalEmployees,
+                filteredEmployees,
+                selectedEmployeeId: null,
             });
-        } catch (error: any) {
-            console.error("Lỗi khi tải danh sách nhân viên cho đăng ký ca:", error?.response?.data || error?.message);
-            window.alert("Không thể tải danh sách nhân viên. Vui lòng thử lại.");
+
+        } catch (err) {
+            console.error(err);
+            window.alert("Không thể tải danh sách nhân viên.");
         }
     };
+
 
     // Hàm lấy danh sách nhân viên đã đăng ký một ca cụ thể
     const getEmployeesForShift = (day: number, detailShiftTypeId: number): Array<{ employeeId?: number; name: string; phone?: string; positionId?: number; roleName?: string }> => {
@@ -453,9 +490,12 @@ const ScheduleManagement = () => {
             const isSameDetailShift = shiftDetailId === detailShiftTypeId;
 
             // Nếu có filter theo shiftType, chỉ lấy schedule có shiftTypeId khớp
+            // NOTE: Chỉ check nếu s.shiftType tồn tại, để tránh trường hợp schedule data thiếu thông tin shiftType
             if (selectedShiftTypeId !== null) {
                 const shiftTypeId = s?.shiftType?.id;
-                return isSameDay && isSameDetailShift && shiftTypeId === selectedShiftTypeId;
+                if (shiftTypeId) {
+                    return isSameDay && isSameDetailShift && shiftTypeId === selectedShiftTypeId;
+                }
             }
 
             return isSameDay && isSameDetailShift;
@@ -476,7 +516,8 @@ const ScheduleManagement = () => {
                 const roleName = rawRoleName ? String(rawRoleName).toUpperCase() : "";
 
                 // Lấy employeeId từ nhiều nguồn có thể
-                const employeeId = employee?.employeeId ?? employee?.id ?? s?.employeeId ?? s?.employee?.id;
+                const rawEmployeeId = employee?.employeeId ?? employee?.id ?? s?.employeeId ?? s?.employee?.id;
+                const employeeId = rawEmployeeId ? Number(rawEmployeeId) : undefined;
 
                 return {
                     employeeId: employeeId,
@@ -980,72 +1021,74 @@ const ScheduleManagement = () => {
                         Xem số lượng ca đăng ký theo từng ngày trong tháng.
                     </p>
                 </div>
-                <div className="flex items-center gap-4">
-                    {isAdmin && (
-                        <div className="flex items-center gap-2">
-                            <label className="text-sm text-[#616f89] dark:text-[#9ca3af]">Supplier:</label>
-                            <select
-                                value={selectedSupplierId || (suppliers.length > 0 ? suppliers[0].id : "")}
-                                onChange={(e) => {
-                                    const value = Number(e.target.value);
-                                    setSelectedSupplierId(value);
-                                }}
-                                className="px-3 py-2 border border-[#dbdfe6] dark:border-[#4b5563] rounded-lg bg-white dark:bg-[#111827] text-[#111318] dark:text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 min-w-[180px]"
-                            >
-                                {suppliers.map((supplier) => (
-                                    <option key={supplier.id} value={supplier.id}>
-                                        {supplier.name}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                    )}
-                    <div className="flex items-center rounded-lg border border-[#dbdfe6] dark:border-[#4b5563] overflow-hidden">
-                        <button
-                            type="button"
-                            onClick={handlePrevMonth}
-                            className="p-1.5 hover:bg-background-light dark:hover:bg-[#374151] text-[#616f89] dark:text-[#9ca3af]"
-                        >
-                            <span className="material-symbols-outlined text-[20px]">chevron_left</span>
-                        </button>
-                        <button
-                            type="button"
-                            onClick={handleNextMonth}
-                            className="p-1.5 hover:bg-background-light dark:hover:bg-[#374151] text-[#616f89] dark:text-[#9ca3af] border-l border-[#dbdfe6] dark:border-[#4b5563]"
-                        >
-                            <span className="material-symbols-outlined text-[20px]">chevron_right</span>
-                        </button>
-                    </div>
-                    <select
-                        value={currentMonth}
-                        onChange={handleChangeMonth}
-                        className="px-3 py-2 border border-[#dbdfe6] dark:border-[#4b5563] rounded-lg bg-white dark:bg-[#111827] text-[#111318] dark:text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    >
-                        {Array.from({ length: 12 }).map((_, index) => (
-                            <option key={index} value={index}>
-                                Tháng {index + 1}
-                            </option>
-                        ))}
-                    </select>
-                    <select
-                        value={currentYear}
-                        onChange={handleChangeYear}
-                        className="px-3 py-2 border border-[#dbdfe6] dark:border-[#4b5563] rounded-lg bg-white dark:bg-[#111827] text-[#111318] dark:text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    >
-                        {Array.from({ length: 7 }).map((_, index) => {
-                            const year = today.getFullYear() - 3 + index;
-                            return (
-                                <option key={year} value={year}>
-                                    {year}
-                                </option>
-                            );
-                        })}
-                    </select>
-                </div>
+
             </div>
 
             <div className="bg-white dark:bg-[#1a2230] border border-[#dbdfe6] dark:border-[#2e374a] rounded-xl shadow-sm overflow-hidden flex flex-col">
                 <div className="flex items-center justify-between px-6 py-4 border-b border-[#dbdfe6] dark:border-[#2e374a]">
+
+                    <div className="flex items-center gap-4">
+                        {isAdmin && (
+                            <div className="flex items-center gap-2">
+                                <label className="text-sm text-[#616f89] dark:text-[#9ca3af]">Supplier:</label>
+                                <select
+                                    value={selectedSupplierId || (suppliers.length > 0 ? suppliers[0].id : "")}
+                                    onChange={(e) => {
+                                        const value = Number(e.target.value);
+                                        setSelectedSupplierId(value);
+                                    }}
+                                    className="px-3 py-2 border border-[#dbdfe6] dark:border-[#4b5563] rounded-lg bg-white dark:bg-[#111827] text-[#111318] dark:text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 min-w-[180px]"
+                                >
+                                    {suppliers.map((supplier) => (
+                                        <option key={supplier.id} value={supplier.id}>
+                                            {supplier.name}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+                        <div className="flex items-center rounded-lg border border-[#dbdfe6] dark:border-[#4b5563] overflow-hidden">
+                            <button
+                                type="button"
+                                onClick={handlePrevMonth}
+                                className="p-1.5 hover:bg-background-light dark:hover:bg-[#374151] text-[#616f89] dark:text-[#9ca3af]"
+                            >
+                                <span className="material-symbols-outlined text-[20px]">chevron_left</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleNextMonth}
+                                className="p-1.5 hover:bg-background-light dark:hover:bg-[#374151] text-[#616f89] dark:text-[#9ca3af] border-l border-[#dbdfe6] dark:border-[#4b5563]"
+                            >
+                                <span className="material-symbols-outlined text-[20px]">chevron_right</span>
+                            </button>
+                        </div>
+                        <select
+                            value={currentMonth}
+                            onChange={handleChangeMonth}
+                            className="px-3 py-2 border border-[#dbdfe6] dark:border-[#4b5563] rounded-lg bg-white dark:bg-[#111827] text-[#111318] dark:text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        >
+                            {Array.from({ length: 12 }).map((_, index) => (
+                                <option key={index} value={index}>
+                                    Tháng {index + 1}
+                                </option>
+                            ))}
+                        </select>
+                        <select
+                            value={currentYear}
+                            onChange={handleChangeYear}
+                            className="px-3 py-2 border border-[#dbdfe6] dark:border-[#4b5563] rounded-lg bg-white dark:bg-[#111827] text-[#111318] dark:text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        >
+                            {Array.from({ length: 7 }).map((_, index) => {
+                                const year = today.getFullYear() - 3 + index;
+                                return (
+                                    <option key={year} value={year}>
+                                        {year}
+                                    </option>
+                                );
+                            })}
+                        </select>
+                    </div>
                     <div className="flex items-center gap-4">
                         <div className="flex flex-col gap-1">
                             <h3 className="text-lg font-bold text-[#111318] dark:text-white">
@@ -1087,7 +1130,19 @@ const ScheduleManagement = () => {
                                         return (
                                             <button
                                                 key={shiftType.id}
-                                                onClick={() => setSelectedShiftTypeId(shiftType.id)}
+                                                onClick={() => {
+                                                    setSelectedShiftTypeId(shiftType.id);
+
+                                                    // SET SỐ CA TỐI ĐA TẠI ĐÂY
+                                                    if (shiftType.name === "3 CA") {
+                                                        setMaxDetailShiftCount(3);
+                                                    } else if (shiftType.name === "4 CA") {
+                                                        setMaxDetailShiftCount(4);
+                                                    } else {
+                                                        // Nghỉ phép hoặc loại khác
+                                                        setMaxDetailShiftCount(0);
+                                                    }
+                                                }}
                                                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${isSelected
                                                     ? "bg-blue-600 text-white"
                                                     : "bg-white dark:bg-[#111827] border border-[#dbdfe6] dark:border-[#4b5563] text-[#111318] dark:text-white hover:bg-gray-50 dark:hover:bg-[#1f2937]"
@@ -1136,10 +1191,12 @@ const ScheduleManagement = () => {
                                 return shiftTypeName.toLowerCase() !== "nghỉ phép";
                             });
 
+                            console.log(shiftTypeData, "hasOtherShiftTypes");
+
                             return (
                                 <div
                                     key={cell.key}
-                                    className={`min-h-[120px] p-2 transition-colors relative overflow-y-auto
+                                    className={`min-h-[230px] p-2 transition-colors relative overflow-y-auto
                                         ${cell.isCurrentMonth
                                             ? "bg-white dark:bg-[#1a2230]"
                                             : "opacity-40 bg-gray-100 dark:bg-[#111827]"
@@ -1181,7 +1238,17 @@ const ScheduleManagement = () => {
                                                             <button
                                                                 type="button"
                                                                 onClick={() => navigate(`/ScheduleManagement/CreateShiftTypeSupplier?startDate=${startDatePrefill}`)}
-                                                                className="mt-2 max-w-full inline-flex items-center justify-center gap-1 rounded-md border border-blue-300 dark:border-blue-600 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/40 dark:to-indigo-900/30 px-2 py-1 text-[10px] font-medium text-blue-700 dark:text-blue-200 shadow-sm hover:shadow-md hover:from-blue-100 hover:to-indigo-100 dark:hover:from-blue-800/50 dark:hover:to-indigo-800/40 hover:border-blue-400 dark:hover:border-blue-500 transition-all duration-200 active:scale-95 overflow-hidden"
+                                                                className="mt-2 max-w-full inline-flex items-center justify-center gap-1 rounded-md
+               border border-amber-300 dark:border-amber-600
+               bg-gradient-to-r from-amber-50 to-yellow-50
+               dark:from-amber-900/40 dark:to-yellow-900/30
+               px-2 py-1 text-[10px] font-medium
+               text-amber-700 dark:text-amber-200
+               shadow-sm hover:shadow-md
+               hover:from-amber-100 hover:to-yellow-100
+               dark:hover:from-amber-800/50 dark:hover:to-yellow-800/40
+               hover:border-amber-400 dark:hover:border-amber-500
+               transition-all duration-200 active:scale-95 overflow-hidden"
                                                             >
                                                                 <span className="material-symbols-outlined text-[13px] flex-shrink-0">
                                                                     add_circle
@@ -1192,10 +1259,43 @@ const ScheduleManagement = () => {
                                                     }
 
                                                     if (scheduleInfo.length > 0) {
+                                                        const currentDetailShiftCount = scheduleInfo.filter(
+                                                            (info: any) => info?.isDetail && info?.detailShiftTypeId
+                                                        ).length;
+                                                        const canRegisterMore =
+                                                            hasActiveShiftType &&
+                                                            maxDetailShiftCount > 0 &&
+                                                            currentDetailShiftCount < maxDetailShiftCount;
                                                         return (
                                                             <div className="mt-1 flex flex-col gap-1">
-                                                                <div className="max-h-[90px] overflow-y-auto flex flex-col gap-1">
+                                                                <div className="max-h-[180px] overflow-y-auto flex flex-col gap-1">
                                                                     {scheduleInfo.map((info, idx) => {
+                                                                        // Define styles for up to 4 shifts
+                                                                        const shiftStyles = [
+                                                                            {
+                                                                                container: "bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-900/30 dark:text-blue-200 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900/50",
+                                                                                badge: "text-blue-800 dark:text-blue-200 bg-blue-100 dark:bg-blue-900/40",
+                                                                                time: "text-blue-600 dark:text-blue-300"
+                                                                            },
+                                                                            {
+                                                                                container: "bg-green-50 text-green-700 border-green-300 dark:bg-green-900/30 dark:text-green-200 dark:border-green-700 hover:bg-green-100 dark:hover:bg-green-900/50",
+                                                                                badge: "text-green-800 dark:text-green-200 bg-green-100 dark:bg-green-900/40",
+                                                                                time: "text-green-600 dark:text-green-300"
+                                                                            },
+                                                                            {
+                                                                                container: "bg-orange-50 text-orange-700 border-orange-300 dark:bg-orange-900/30 dark:text-orange-200 dark:border-orange-700 hover:bg-orange-100 dark:hover:bg-orange-900/50",
+                                                                                badge: "text-orange-800 dark:text-orange-200 bg-orange-100 dark:bg-orange-900/40",
+                                                                                time: "text-orange-600 dark:text-orange-300"
+                                                                            },
+                                                                            {
+                                                                                container: "bg-purple-50 text-purple-700 border-purple-300 dark:bg-purple-900/30 dark:text-purple-200 dark:border-purple-700 hover:bg-purple-100 dark:hover:bg-purple-900/50",
+                                                                                badge: "text-purple-800 dark:text-purple-200 bg-purple-100 dark:bg-purple-900/40",
+                                                                                time: "text-purple-600 dark:text-purple-300"
+                                                                            }
+                                                                        ];
+
+                                                                        const style = shiftStyles[idx % shiftStyles.length];
+
                                                                         // Nếu đã chọn shiftType: hiển thị chi tiết từng ca với số lượng người đăng ký
                                                                         if (info.isDetail && info.detailShiftTypeId) {
                                                                             const employeeCount = info.employeeCount || 0;
@@ -1234,17 +1334,17 @@ const ScheduleManagement = () => {
                                                                                         <div className="font-semibold truncate flex-1">{info.detailShiftTypeName}</div>
                                                                                         {employeeCount > 0 && (
                                                                                             <div className="flex items-center gap-1 whitespace-nowrap">
-                                                                                                <span className="text-[8px] font-semibold text-blue-800 dark:text-blue-200 bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 rounded">
+                                                                                                <span className={`text-[8px] font-semibold px-1.5 py-0.5 rounded ${style.badge}`}>
                                                                                                     USER: {userCount}
                                                                                                 </span>
-                                                                                                <span className="text-[8px] font-semibold text-blue-800 dark:text-blue-200 bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 rounded">
+                                                                                                <span className={`text-[8px] font-semibold px-1.5 py-0.5 rounded ${style.badge}`}>
                                                                                                     MANAGER: {managerCount}
                                                                                                 </span>
                                                                                             </div>
                                                                                         )}
                                                                                     </div>
                                                                                     {info.startAt && info.endAt && (
-                                                                                        <div className="text-[8px] text-blue-600 dark:text-blue-300 mt-0.5">
+                                                                                        <div className={`text-[8px] mt-0.5 ${style.time}`}>
                                                                                             {info.startAt} - {info.endAt}
                                                                                         </div>
                                                                                     )}
@@ -1256,7 +1356,7 @@ const ScheduleManagement = () => {
                                                                         return (
                                                                             <div
                                                                                 key={idx}
-                                                                                className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-300 dark:bg-blue-900/30 dark:text-blue-200 dark:border-blue-700 text-center"
+                                                                                className={`text-[10px] px-1.5 py-0.5 rounded border text-center ${style.container}`}
                                                                                 title={`${info.shiftTypeName}: ${info.detailCount} ca chi tiết`}
                                                                             >
                                                                                 <span className="font-semibold">{info.shiftTypeName}</span>
@@ -1266,10 +1366,10 @@ const ScheduleManagement = () => {
                                                                     })}
                                                                 </div>
                                                                 {/* Nút đăng ký thêm ca - hiển thị ngay cả khi đã có ca đăng ký */}
-                                                                {hasActiveShiftType && (
+                                                                {canRegisterMore && (
                                                                     <button
                                                                         type="button"
-                                                                        onClick={() => openRegisterModalForDay(cell.label as number)}
+                                                                        onClick={() => openRegisterModalForDay(cell.label as number, scheduleInfo as any)}
                                                                         className="mt-1 max-w-full inline-flex items-center justify-center gap-1 rounded-md border border-blue-300 dark:border-blue-600 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/40 dark:to-indigo-900/30 px-2 py-1 text-[10px] font-medium text-blue-700 dark:text-blue-200 shadow-sm hover:shadow-md hover:from-blue-100 hover:to-indigo-100 dark:hover:from-blue-800/50 dark:hover:to-indigo-800/40 hover:border-blue-400 dark:hover:border-blue-500 transition-all duration-200 active:scale-95 overflow-hidden"
                                                                     >
                                                                         <span className="material-symbols-outlined text-[13px] flex-shrink-0">
@@ -1303,7 +1403,7 @@ const ScheduleManagement = () => {
                                                     return (
                                                         <button
                                                             type="button"
-                                                            onClick={() => openRegisterModalForDay(cell.label as number)}
+                                                            onClick={() => openRegisterModalForDay(cell.label as number, scheduleInfo as any)}
                                                             className="mt-2 max-w-full inline-flex items-center justify-center gap-1 rounded-md border border-blue-300 dark:border-blue-600 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/40 dark:to-indigo-900/30 px-2 py-1 text-[10px] font-medium text-blue-700 dark:text-blue-200 shadow-sm hover:shadow-md hover:from-blue-100 hover:to-indigo-100 dark:hover:from-blue-800/50 dark:hover:to-indigo-800/40 hover:border-blue-400 dark:hover:border-blue-500 transition-all duration-200 active:scale-95 overflow-hidden"
                                                         >
                                                             <span className="material-symbols-outlined text-[13px] flex-shrink-0">
@@ -1505,15 +1605,26 @@ const ScheduleManagement = () => {
             )}
 
             {registerModal.show && (
-                <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center px-4" onClick={() => setRegisterModal({ ...registerModal, show: false })}>
-                    <div className="bg-white dark:bg-[#111827] rounded-lg shadow-xl max-w-md w-full p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+                <div
+                    className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center px-4"
+                    onClick={() => setRegisterModal({ ...registerModal, show: false })}
+                >
+                    <div
+                        className="bg-white dark:bg-[#111827] rounded-lg shadow-xl max-w-md w-full p-6 space-y-4"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Header */}
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
-                                <span className="material-symbols-outlined text-blue-600 dark:text-blue-400 text-3xl">event_available</span>
+                                <span className="material-symbols-outlined text-blue-600 dark:text-blue-400 text-3xl">
+                                    event_available
+                                </span>
                                 <div>
-                                    <h4 className="text-lg font-semibold text-[#111318] dark:text-white">Đăng ký ca cho nhân viên</h4>
+                                    <h4 className="text-lg font-semibold text-[#111318] dark:text-white">
+                                        Đăng ký ca cho nhân viên
+                                    </h4>
                                     <p className="text-sm text-[#616f89] dark:text-[#9ca3af]">
-                                        Ngày {registerModal.day} - Supplier hiện tại
+                                        Ngày {registerModal.day}
                                     </p>
                                 </div>
                             </div>
@@ -1525,82 +1636,115 @@ const ScheduleManagement = () => {
                             </button>
                         </div>
 
-                        <div className="space-y-3">
+                        {/* Body */}
+                        <div className="space-y-4">
+                            {/* Select detail shift */}
                             <div>
                                 <label className="block text-xs font-medium text-[#616f89] dark:text-[#9ca3af] mb-1">
                                     Chọn ca chi tiết
                                 </label>
                                 <select
-                                    className="w-full px-3 py-2 border border-[#dbdfe6] dark:border-[#4b5563] rounded-lg bg-white dark:bg-[#111827] text-sm text-[#111318] dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                    className="w-full px-3 py-2 border border-[#dbdfe6] dark:border-[#4b5563] rounded-lg bg-white dark:bg-[#111827] text-sm"
                                     value={registerModal.selectedDetailId ?? ""}
-                                    onChange={(e) =>
-                                        setRegisterModal((prev) => ({
+                                    onChange={(e) => {
+                                        const detailId = Number(e.target.value);
+                                        const detail = registerModal.details.find(d => d.id === detailId);
+                                        if (!detail) return;
+
+                                        const filteredEmployees = registerModal.employees.filter(emp =>
+                                            !detail.registeredEmployeeNames.includes(
+                                                emp.name.trim().toLowerCase()
+                                            )
+                                        );
+
+                                        setRegisterModal(prev => ({
                                             ...prev,
-                                            selectedDetailId: e.target.value ? Number(e.target.value) : null,
-                                        }))
-                                    }
+                                            selectedDetailId: detailId,
+                                            filteredEmployees,
+                                            selectedEmployeeId: null,
+                                        }));
+                                    }}
                                 >
-                                    {registerModal.details.map((d) => (
+                                    {registerModal.details.map(d => (
                                         <option key={d.id} value={d.id}>
                                             {d.name} ({d.startAt} - {d.endAt})
                                         </option>
                                     ))}
                                 </select>
+
+                                {/* Registered employees */}
+                                {(() => {
+                                    const detail = registerModal.details.find(
+                                        d => d.id === registerModal.selectedDetailId
+                                    );
+                                    if (!detail || detail.registeredEmployeeNames.length === 0) return null;
+
+                                    return (
+                                        <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                                            Đã đăng ký: {detail.registeredEmployeeNames.join(", ")}
+                                        </div>
+                                    );
+                                })()}
                             </div>
 
+                            {/* Select employee */}
                             <div>
                                 <label className="block text-xs font-medium text-[#616f89] dark:text-[#9ca3af] mb-1">
                                     Chọn nhân viên
                                 </label>
                                 <select
-                                    className="w-full px-3 py-2 border border-[#dbdfe6] dark:border-[#4b5563] rounded-lg bg-white dark:bg-[#111827] text-sm text-[#111318] dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                    className="w-full px-3 py-2 border border-[#dbdfe6] dark:border-[#4b5563] rounded-lg bg-white dark:bg-[#111827] text-sm"
                                     value={registerModal.selectedEmployeeId ?? ""}
                                     onChange={(e) =>
-                                        setRegisterModal((prev) => ({
+                                        setRegisterModal(prev => ({
                                             ...prev,
                                             selectedEmployeeId: e.target.value ? Number(e.target.value) : null,
                                         }))
                                     }
                                 >
-                                    {registerModal.employees.map((emp) => (
+                                    <option value="">Chọn nhân viên...</option>
+                                    {registerModal.filteredEmployees.map(emp => (
                                         <option key={emp.id} value={emp.id}>
                                             #{emp.id} - {emp.name}
                                         </option>
                                     ))}
                                 </select>
+
+                                {registerModal.filteredEmployees.length === 0 && (
+                                    <p className="text-xs text-red-500 mt-1">
+                                        Tất cả nhân viên đã được đăng ký ca này
+                                    </p>
+                                )}
                             </div>
                         </div>
 
+                        {/* Footer */}
                         <div className="flex justify-end gap-2 pt-2">
                             <button
-                                className="px-4 py-2 rounded border border-[#dbdfe6] dark:border-[#4b5563] text-[#111318] dark:text-white hover:bg-gray-100 dark:hover:bg-[#374151] text-sm"
+                                className="px-4 py-2 rounded border border-[#dbdfe6] dark:border-[#4b5563] text-sm"
                                 onClick={() => setRegisterModal({ ...registerModal, show: false })}
                             >
                                 Hủy
                             </button>
+
                             <button
-                                className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700 text-sm disabled:opacity-60"
+                                className="px-4 py-2 rounded bg-blue-600 text-white text-sm disabled:opacity-60"
                                 disabled={!registerModal.selectedDetailId || !registerModal.selectedEmployeeId}
                                 onClick={async () => {
                                     if (!registerModal.selectedDetailId || !registerModal.selectedEmployeeId) return;
 
-                                    // Xác định supplierId
-                                    let supplierIdForApi: number | undefined = undefined;
+                                    let supplierIdForApi: number | undefined;
                                     if (isAdmin) {
                                         supplierIdForApi = selectedSupplierId;
                                     } else {
-                                        const employeeStr = localStorage.getItem("employee");
-                                        if (employeeStr) {
-                                            try {
-                                                const emp = JSON.parse(employeeStr);
-                                                supplierIdForApi = emp?.supplierId;
-                                            } catch {
-                                                supplierIdForApi = undefined;
-                                            }
-                                        }
+                                        try {
+                                            const emp = JSON.parse(localStorage.getItem("employee") || "{}");
+                                            supplierIdForApi = emp?.supplierId;
+                                        } catch { }
                                     }
+
                                     if (!supplierIdForApi) {
-                                        window.alert("Không xác định được supplierId để đăng ký ca.");
+                                        window.alert("Không xác định được supplierId.");
                                         return;
                                     }
 
@@ -1611,6 +1755,7 @@ const ScheduleManagement = () => {
                                         registrationDate,
                                         employeeId: registerModal.selectedEmployeeId,
                                     };
+
                                     if (isPastDate(registerModal.day)) {
                                         payload.dateRequest = registrationDate;
                                     }
@@ -1618,12 +1763,10 @@ const ScheduleManagement = () => {
                                     try {
                                         await scheduleApi.create(payload);
                                         await loadScheduleData();
-                                        window.alert("Đăng ký ca cho nhân viên thành công.");
+                                        window.alert("Đăng ký ca thành công.");
                                         setRegisterModal({ ...registerModal, show: false });
-                                    } catch (error: any) {
-                                        console.error("Lỗi khi đăng ký ca từ modal đăng ký:", error?.response?.data || error?.message);
-                                        const msg = error?.response?.data?.message || error?.message || "Đã xảy ra lỗi khi đăng ký ca.";
-                                        window.alert(msg);
+                                    } catch (err: any) {
+                                        window.alert(err?.response?.data?.message || "Lỗi đăng ký ca.");
                                     }
                                 }}
                             >
