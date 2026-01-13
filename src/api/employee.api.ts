@@ -58,6 +58,15 @@ export interface Managers {
     avatarUrl: string;
 }
 
+export interface WorkTimeResponse {
+    employeeId: number;
+    employee: string;
+    fromDate: string; // yyyy-MM-dd
+    toDate: string;   // yyyy-MM-dd
+    success: boolean;
+    message: string;
+}
+
 export interface EmployeeStatusEvent {
     employeeId: number;
     userId: string;
@@ -191,6 +200,19 @@ export const employeeApi = {
 
     getTypeWorksAndCompanies(): Promise<ApiResponse<TypeWorksAndCompaniesResponse>> {
         return axiosClient.get("/employee/type-works-companies");
+    },
+
+    getWorkTime(
+        params: {
+            employeeId: number;
+            employee: string;
+            fromDate: string; // yyyy-MM-dd
+            toDate: string;   // yyyy-MM-dd
+        }
+    ): Promise<ApiResponse<WorkTimeResponse>> {
+        return axiosClient.get("/employees/worktime", {
+            params,
+        });
     },
 };
 

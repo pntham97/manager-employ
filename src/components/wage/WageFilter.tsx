@@ -34,7 +34,11 @@ interface WageFilterProps {
 
     selectedEmployeeId: number | null;
     setSelectedEmployeeId: (id: number | null) => void;
-
+    fromDate: string;
+    toDate: string;
+    onFromDateChange: (val: string) => void;
+    onToDateChange: (val: string) => void;
+    handleSubmit: () => void;
     typeWorksEmploys: string | null;
 }
 
@@ -48,7 +52,12 @@ const WageFilter: React.FC<WageFilterProps> = ({
     onSupplierChange,
     selectedEmployeeId,
     setSelectedEmployeeId,
-    typeWorksEmploys
+    onFromDateChange,
+    onToDateChange,
+    handleSubmit,
+    toDate,
+    fromDate
+    // typeWorksEmploys
 }) => {
     return (
         <div className="bg-white dark:bg-[#1a202c] rounded-xl shadow-sm border border-gray-100 dark:border-gray-800 p-6">
@@ -150,13 +159,57 @@ const WageFilter: React.FC<WageFilterProps> = ({
                         </div>
                     </div>
                 </label>
+                <label className="flex flex-col gap-2">
+                    <span className="text-slate-900 dark:text-slate-200 text-sm font-medium ml-1">
+                        Khoảng thời gian
+                    </span>
 
-                {typeWorksEmploys === "Hợp đồng" && <label className="flex flex-col gap-2">
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                        {/* From date */}
+                        <div className="relative">
+                            <input
+                                type="date"
+                                value={fromDate}
+                                onChange={(e) => onFromDateChange(e.target.value)}
+                                className="w-full sm:w-40 bg-slate-50 dark:bg-slate-800
+                    border border-slate-200 dark:border-slate-700
+                    text-slate-900 dark:text-white text-sm
+                    rounded-lg px-3 py-2 shadow-sm
+                    focus:ring-2 focus:ring-primary/20 focus:border-primary
+                    transition-colors cursor-pointer"
+                            />
+                        </div>
+
+                        <span className="text-xs font-semibold text-slate-400 dark:text-slate-400">
+                            —
+                        </span>
+
+                        {/* To date */}
+                        <div className="relative">
+                            <input
+                                type="date"
+                                value={toDate}
+                                onChange={(e) => onToDateChange(e.target.value)}
+                                className="w-full sm:w-40 bg-slate-50 dark:bg-slate-800
+                    border border-slate-200 dark:border-slate-700
+                    text-slate-900 dark:text-white text-sm
+                    rounded-lg px-3 py-2 shadow-sm
+                    focus:ring-2 focus:ring-primary/20 focus:border-primary
+                    transition-colors cursor-pointer"
+                            />
+                        </div>
+                    </div>
+                </label>
+                <button onClick={handleSubmit} className="flex max-w-[180px] cursor-pointer items-center justify-center rounded-lg h-10 px-4 bg-[#2563eb] text-white text-sm font-bold shadow-lg shadow-blue-500/30 hover:bg-blue-600 hover:text-white transition-colors">
+                    <span className="material-symbols-outlined text-[20px] mr-2">send</span>
+                    <span className="truncate">Xuất phiếu lương</span>
+                </button>
+                {/* {typeWorksEmploys === "Hợp đồng" && <label className="flex flex-col gap-2">
                     <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Kỳ lương</span>
                     <div className="relative">
                         <input className="form-input w-full h-11 rounded-lg border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-[#111318] dark:text-white focus:ring-[#2563eb] focus:border-[#2563eb] px-4" type="month" value="2023-10" />
                     </div>
-                </label>}
+                </label>} */}
 
             </div>
         </div>

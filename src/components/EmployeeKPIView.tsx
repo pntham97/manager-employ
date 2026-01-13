@@ -11,19 +11,7 @@ const EmployeeKPIView = () => {
                     </p>
                 </div>
                 <div className="flex flex-col sm:flex-row items-end gap-3 w-full md:w-auto">
-                    <label className="flex flex-col w-full sm:w-auto">
-                        <span className="text-xs font-semibold text-text-secondary-light dark:text-text-secondary-dark mb-1 ml-1">Chọn Tuần</span>
-                        <div className="relative">
-                            <select className="appearance-none w-full sm:w-64 bg-card-light dark:bg-card-dark border border-border-light dark:border-border-dark text-text-main-light dark:text-text-main-dark text-sm rounded-lg focus:ring-primary focus:border-primary block p-2.5 pr-10 shadow-sm transition-colors cursor-pointer">
-                                <option value="w42">Tuần 42 (16/10 - 22/10)</option>
-                                <option value="w41">Tuần 41 (09/10 - 15/10)</option>
-                                <option value="w40">Tuần 40 (02/10 - 08/10)</option>
-                            </select>
-                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-text-secondary-light">
-                                <span className="material-symbols-outlined text-lg">expand_more</span>
-                            </div>
-                        </div>
-                    </label>
+
                     {/* <button className="flex items-center justify-center gap-2 h-[42px] px-4 bg-blue-500 hover:bg-blue-500 text-white text-sm font-bold rounded-lg shadow-md hover:shadow-lg transition-all w-full sm:w-auto">
                                     <span className="material-symbols-outlined text-lg">download</span>
                                     <span>Xuất báo cáo</span>

@@ -21,10 +21,7 @@ const WageHeader: React.FC = () => {
                         <span className="material-symbols-outlined text-[20px] mr-2">download</span>
                         <span className="truncate">Xuất Excel</span>
                     </button>
-                    <button className="flex cursor-pointer items-center justify-center rounded-lg h-10 px-4 bg-[#2563eb] text-white text-sm font-bold shadow-lg shadow-blue-500/30 hover:bg-blue-600 hover:text-white transition-colors">
-                        <span className="material-symbols-outlined text-[20px] mr-2">send</span>
-                        <span className="truncate">Gửi phiếu lương</span>
-                    </button>
+
                 </div>
             </div>
         </>

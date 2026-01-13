@@ -5,6 +5,8 @@ import EmployeeKPIView from "../components/EmployeeKPIView";
 import WageFilter, { type CompanySupplier } from "../components/wage/WageFilter";
 import WageHeader from "../components/wage/WageHeader";
 import WageSidebar from "../components/wage/WageSidebar";
+import toast from "react-hot-toast";
+import { SSF } from "xlsx";
 
 const Wage: React.FC = () => {
     // State declarations
@@ -19,6 +21,8 @@ const Wage: React.FC = () => {
     const [selectedSuppliersId, setSelectedSuppliersId] = useState<number | null>(null);
     const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(null);
     const [employees, setEmployees] = useState<EmployeeResponse[]>([]);
+    const [fromDate, setFromDate] = useState<string>("");
+    const [toDate, setToDate] = useState<string>("");
 
     useEffect(() => {
 
@@ -177,6 +181,32 @@ const Wage: React.FC = () => {
         setSelectedEmployeeId(null);
     };
 
+    const handleSubmit = async () => {
+        if (!selectedEmployeeId) {
+            toast.error("Vui lòng chọn nhân viên!");
+            return;
+        }
+
+        if (!fromDate || !toDate) {
+            toast.error("Vui lòng chọn từ ngày và đến ngày!");
+            return;
+        }
+        const res = await employeeApi.getWorkTime({
+            employeeId: selectedEmployeeId || 0,
+            employee: employees.find(
+                (item) => item.employeeId === selectedEmployeeId
+            )?.name || "",
+            fromDate: fromDate,
+            toDate: toDate,
+        });
+
+        if (res.data) {
+            console.log(res.data);
+        }
+        // gọi API với fromDate, toDate...
+    };
+    console.log(selectedEmployeeId, "typeWorksEmploys");
+
     return (
         <div className="px-16 py-8 w-full flex flex-col">
             <WageHeader />
@@ -194,6 +224,11 @@ const Wage: React.FC = () => {
                         selectedEmployeeId={selectedEmployeeId}
                         setSelectedEmployeeId={setSelectedEmployeeId}
                         typeWorksEmploys={typeWorksEmploys}
+                        fromDate={fromDate}
+                        toDate={toDate}
+                        onFromDateChange={setFromDate}
+                        onToDateChange={setToDate}
+                        handleSubmit={handleSubmit}
                     />
                     {renderByTypeWork(typeWorksEmploys)}
                 </div>
