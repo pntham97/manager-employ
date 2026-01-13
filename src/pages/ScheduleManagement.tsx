@@ -1010,8 +1010,6 @@ const ScheduleManagement = () => {
         );
     }
 
-    console.log(maxDetailShiftCount);
-
     return (
         <div className="p-6 lg:p-10 px-8 mx-auto w-full flex flex-col gap-8">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
@@ -1265,6 +1263,14 @@ const ScheduleManagement = () => {
                                                             hasActiveShiftType &&
                                                             maxDetailShiftCount > 0 &&
                                                             currentDetailShiftCount < maxDetailShiftCount;
+                                                        const detailShiftOrderMap = new Map<number, number>();
+
+                                                        scheduleInfo
+                                                            .filter((i: any) => i.isDetail && i.detailShiftTypeId)
+                                                            .sort((a: any, b: any) => (a.startAt || "").localeCompare(b.startAt || ""))
+                                                            .forEach((item: any, index: number) => {
+                                                                detailShiftOrderMap.set(item.detailShiftTypeId, index);
+                                                            });
                                                         return (
                                                             <div className="mt-1 flex flex-col gap-1">
                                                                 <div className="max-h-[180px] overflow-y-auto flex flex-col gap-1">
@@ -1274,27 +1280,44 @@ const ScheduleManagement = () => {
                                                                             {
                                                                                 container: "bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-900/30 dark:text-blue-200 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900/50",
                                                                                 badge: "text-blue-800 dark:text-blue-200 bg-blue-100 dark:bg-blue-900/40",
-                                                                                time: "text-blue-600 dark:text-blue-300"
+                                                                                time: "text-blue-600 dark:text-blue-300",
                                                                             },
                                                                             {
                                                                                 container: "bg-green-50 text-green-700 border-green-300 dark:bg-green-900/30 dark:text-green-200 dark:border-green-700 hover:bg-green-100 dark:hover:bg-green-900/50",
                                                                                 badge: "text-green-800 dark:text-green-200 bg-green-100 dark:bg-green-900/40",
-                                                                                time: "text-green-600 dark:text-green-300"
+                                                                                time: "text-green-600 dark:text-green-300",
                                                                             },
                                                                             {
                                                                                 container: "bg-orange-50 text-orange-700 border-orange-300 dark:bg-orange-900/30 dark:text-orange-200 dark:border-orange-700 hover:bg-orange-100 dark:hover:bg-orange-900/50",
                                                                                 badge: "text-orange-800 dark:text-orange-200 bg-orange-100 dark:bg-orange-900/40",
-                                                                                time: "text-orange-600 dark:text-orange-300"
+                                                                                time: "text-orange-600 dark:text-orange-300",
                                                                             },
                                                                             {
                                                                                 container: "bg-purple-50 text-purple-700 border-purple-300 dark:bg-purple-900/30 dark:text-purple-200 dark:border-purple-700 hover:bg-purple-100 dark:hover:bg-purple-900/50",
                                                                                 badge: "text-purple-800 dark:text-purple-200 bg-purple-100 dark:bg-purple-900/40",
-                                                                                time: "text-purple-600 dark:text-purple-300"
-                                                                            }
+                                                                                time: "text-purple-600 dark:text-purple-300",
+                                                                            },
                                                                         ];
+                                                                        const shiftId = Number(info.detailShiftTypeId);
 
-                                                                        const style = shiftStyles[idx % shiftStyles.length];
+                                                                        let style;
 
+                                                                        switch (info.detailShiftTypeName) {
+                                                                            case "Ca 1":
+                                                                                style = shiftStyles[0];
+                                                                                break;
+                                                                            case "Ca 2":
+                                                                                style = shiftStyles[1];
+                                                                                break;
+                                                                            case "Ca 3":
+                                                                                style = shiftStyles[2];
+                                                                                break;
+                                                                            case "Ca 4":
+                                                                                style = shiftStyles[3];
+                                                                                break;
+                                                                            default:
+                                                                                style = shiftStyles[0];
+                                                                        }
                                                                         // Nếu đã chọn shiftType: hiển thị chi tiết từng ca với số lượng người đăng ký
                                                                         if (info.isDetail && info.detailShiftTypeId) {
                                                                             const employeeCount = info.employeeCount || 0;
@@ -1350,7 +1373,6 @@ const ScheduleManagement = () => {
                                                                                 </div>
                                                                             );
                                                                         }
-
                                                                         // Nếu không chọn shiftType: hiển thị tổng hợp như cũ
                                                                         return (
                                                                             <div
