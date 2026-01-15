@@ -1272,7 +1272,7 @@ const EmployDetail = () => {
             rightY = addInfoRow("Giới tính", employee.gender ? "Nam" : "Nữ", rightY, columnWidth);
             rightY = addInfoRow("Ngày gia nhập", formatDate(employee.joinDate), rightY, columnWidth);
             rightY = addInfoRow("Thâm niên", calculateTenure(employee.joinDate), rightY, columnWidth);
-            rightY = addInfoRow("Trạng thái", employee.online ? "Đang hoạt động" : "Offline", rightY, columnWidth);
+            // rightY = addInfoRow("Trạng thái", employee.online ? "Đang hoạt động" : "Offline", rightY, columnWidth);
 
             yPosition = Math.max(currentY, rightY) + 8;
 
@@ -1309,7 +1309,7 @@ const EmployDetail = () => {
                 employee.bankAccountHolderName || "N/A",
                 currentY,
                 0,
-                "Roboto-Regular"
+                "NotoSans-Regular"
             );
 
             // pdf.setFont("Roboto-Regular", "normal");

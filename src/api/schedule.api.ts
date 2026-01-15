@@ -9,7 +9,14 @@ export interface CreateSchedulePayload {
     // Tuỳ chọn: ADMIN/MANAGER có thể truyền employeeId để đăng ký ca cho nhân viên khác
     employeeId?: number;
 }
-
+// export interface shiftTimeDeviation {
+//     supplierId: number;
+//     detailShiftTypeId: number;
+//     registrationDate: string;
+//     dateRequest?: string;
+//     // Tuỳ chọn: ADMIN/MANAGER có thể truyền employeeId để đăng ký ca cho nhân viên khác
+//     employeeId?: number;
+// }
 export const scheduleApi = {
     create(data: CreateSchedulePayload): Promise<ApiResponse<any>> {
         return axiosClient.post("/schedule", data);
@@ -64,6 +71,14 @@ export const scheduleApi = {
         return axiosClient.get("/schedule/admin-manager", {
             params,
         });
+    },
+
+    createOrUpdateShiftTimeDeviation(data: {
+        scheduleId: number;
+        timeDeviation?: number;
+        reason?: string;
+    }): Promise<ApiResponse<any>> {
+        return axiosClient.post("/shift-time-deviation", data);
     },
 };
 

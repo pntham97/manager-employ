@@ -11,6 +11,14 @@ interface RegisterDetail {
     endAt: string;
     registeredEmployeeNames: string[];
 }
+interface ShiftTimeDeviation {
+    id: number;
+    scheduleId: number;
+    timeDeviation: number; // số phút lệch (có thể âm hoặc dương)
+    reason: string;
+    reviewStatus: boolean;
+    createdAt: string;
+}
 const ScheduleManagement = () => {
     const today = new Date();
     const [currentDate, setCurrentDate] = useState(
@@ -27,14 +35,17 @@ const ScheduleManagement = () => {
     }>({ show: false, message: "" });
     const [selectedSupplierId, setSelectedSupplierId] = useState<number | undefined>(undefined);
     const [selectedShiftTypeId, setSelectedShiftTypeId] = useState<number | null>(null);
-    const [employeeListModal, setEmployeeListModal] = useState<{
+    let [employeeListModal, setEmployeeListModal] = useState<{
         show: boolean;
         day: number;
         detailShiftTypeName: string;
         startAt: string;
         endAt: string;
         detailShiftTypeId: number | null;
-        employees: Array<{ employeeId?: number; name: string; phone?: string; positionId?: number; roleName?: string }>;
+
+        employees: Array<{
+            employeeId?: number; name: string; phone?: string; positionId?: number; roleName?: string; shiftTimeDeviation?: ShiftTimeDeviation; scheduleId?: number;
+        }>;
     }>({
         show: false,
         day: 0,
@@ -44,7 +55,11 @@ const ScheduleManagement = () => {
         detailShiftTypeId: null,
         employees: [],
     });
+    let [listEmployeesChoosen, setListEmployeesChoosen] = useState<Array<{
+        employeeId?: number; name: string; phone?: string; positionId?: number; roleName?: string; shiftTimeDeviation?: ShiftTimeDeviation; scheduleId?: number;
+    }>>([]);
     const [newEmployeeId, setNewEmployeeId] = useState<number | null>(null);
+
     const [availableEmployees, setAvailableEmployees] = useState<Array<{ id: number; name: string }>>([]);
     const [loadingEmployees, setLoadingEmployees] = useState(false);
     const [pendingCreateEmployee, setPendingCreateEmployee] = useState(false);
@@ -64,6 +79,26 @@ const ScheduleManagement = () => {
         employees: [],
         filteredEmployees: [],
         selectedEmployeeId: null,
+    });
+    const [timeDeviationModal, setTimeDeviationModal] = useState<{
+        show: boolean;
+        scheduleId: number | null;
+        employeeName: string;
+        currentTimeDeviation?: number;
+        currentReason?: string;
+    }>({
+        show: false,
+        scheduleId: null,
+        employeeName: "",
+        currentTimeDeviation: undefined,
+        currentReason: undefined,
+    });
+    const [timeDeviationForm, setTimeDeviationForm] = useState<{
+        timeDeviation: string;
+        reason: string;
+    }>({
+        timeDeviation: "",
+        reason: "",
     });
 
     const currentMonth = currentDate.getMonth(); // 0-11
@@ -474,7 +509,10 @@ const ScheduleManagement = () => {
 
 
     // Hàm lấy danh sách nhân viên đã đăng ký một ca cụ thể
-    const getEmployeesForShift = (day: number, detailShiftTypeId: number): Array<{ employeeId?: number; name: string; phone?: string; positionId?: number; roleName?: string }> => {
+    const getEmployeesForShift = (day: number, detailShiftTypeId: number): Array<
+        {
+            employeeId?: number; name: string; phone?: string; positionId?: number; roleName?: string; shiftTimeDeviation?: ShiftTimeDeviation; scheduleId?: number; // Thêm scheduleId để gọi API
+        }> => {
         if (!Array.isArray(scheduleData)) return [];
 
         const daySchedules = scheduleData.filter((s: any) => {
@@ -518,16 +556,21 @@ const ScheduleManagement = () => {
                 // Lấy employeeId từ nhiều nguồn có thể
                 const rawEmployeeId = employee?.employeeId ?? employee?.id ?? s?.employeeId ?? s?.employee?.id;
                 const employeeId = rawEmployeeId ? Number(rawEmployeeId) : undefined;
-
+                // Lấy thông tin shiftTimeDeviation
+                const shiftTimeDeviation = s?.shiftTimeDeviation;
                 return {
                     employeeId: employeeId,
                     name: employee?.name || "Chưa có tên",
                     phone: employee?.phone,
                     positionId: employee?.positionId,
                     roleName,
+                    shiftTimeDeviation: shiftTimeDeviation || undefined,
+                    scheduleId: s?.id, // Lưu scheduleId để gọi API
                 };
             })
-            .filter((emp: any) => emp !== null) as Array<{ employeeId?: number; name: string; phone?: string; positionId?: number; roleName?: string }>;
+            .filter((emp: any) => emp !== null) as Array<{
+                employeeId?: number; name: string; phone?: string; positionId?: number; roleName?: string; shiftTimeDeviation?: ShiftTimeDeviation; scheduleId?: number;
+            }>;
     };
 
     // Hàm xử lý click vào ca để hiển thị danh sách nhân viên
@@ -539,6 +582,8 @@ const ScheduleManagement = () => {
         detailShiftTypeId: number
     ) => {
         const employeesInShift = getEmployeesForShift(day, detailShiftTypeId);
+        console.log("🔍 [DEBUG] Employees in shift:", employeesInShift);
+        console.log("🔍 [DEBUG] Employees:", employeeListModal.employees);
         setEmployeeListModal({
             show: true,
             day,
@@ -595,7 +640,7 @@ const ScheduleManagement = () => {
             // Loại bỏ những nhân viên đã đăng ký ca này khỏi danh sách
             // Tạo Set chứa employeeId đã đăng ký
             const registeredEmployeeIds = new Set(
-                employeesInShift
+                employeeListModal.employees
                     .map((emp) => emp.employeeId)
                     .filter((id): id is number => id !== undefined && id !== null)
             );
@@ -622,11 +667,13 @@ const ScheduleManagement = () => {
 
             // Debug log
             console.log("🔍 [DEBUG] Filter employees:", {
-                totalEmployees: mapped.length,
+                EmployeeListModal: employeeListModal.employees,
                 registeredCount: employeesInShift.length,
                 registeredIds: Array.from(registeredEmployeeIds),
                 registeredNames: Array.from(registeredEmployeeNames),
+                employees: employees,
                 filteredCount: filteredMapped.length,
+                availableEmployees: availableEmployees,
             });
 
             setAvailableEmployees(filteredMapped);
@@ -651,12 +698,18 @@ const ScheduleManagement = () => {
     // Đăng ký ca cho nhân viên từ modal danh sách nhân viên
     const handleCreateScheduleForEmployee = async () => {
         if (!employeeListModal.show || !employeeListModal.day || !employeeListModal.detailShiftTypeId) return;
-        if (!newEmployeeId) {
-            window.alert("Vui lòng nhập ID nhân viên cần đăng ký ca.");
+
+        // Lấy thông tin nhân viên đã chọn
+        const selectedEmployee = availableEmployees.find(emp => emp.id === newEmployeeId);
+
+        if (!selectedEmployee) {
+            window.alert("Vui lòng chọn nhân viên cần đăng ký ca.");
             return;
         }
 
-        const employeeIdNum = newEmployeeId;
+        const employeeIdNum = selectedEmployee.id;
+        const employeeName = selectedEmployee.name;
+
         if (!employeeIdNum || employeeIdNum <= 0) {
             window.alert("ID nhân viên không hợp lệ.");
             return;
@@ -671,7 +724,6 @@ const ScheduleManagement = () => {
             }
             supplierIdForApi = selectedSupplierId;
         } else {
-            // MANAGER: lấy supplierId từ localStorage.employee giống như Calendar
             const employeeStr = localStorage.getItem("employee");
             if (!employeeStr) {
                 window.alert("Không tìm thấy thông tin employee trong localStorage.");
@@ -699,46 +751,147 @@ const ScheduleManagement = () => {
             employeeId: employeeIdNum,
         };
 
-        // Nếu là ngày quá khứ, thêm dateRequest để backend xử lý như bổ sung ca
         if (isPastDate(employeeListModal.day)) {
             payload.dateRequest = registrationDate;
         }
 
         const ok = window.confirm(
-            `Bạn có chắc muốn đăng ký ca "${employeeListModal.detailShiftTypeName}" ngày ${employeeListModal.day} cho nhân viên ID=${employeeIdNum}?`
+            `Bạn có chắc muốn đăng ký ca "${employeeListModal.detailShiftTypeName}" ngày ${employeeListModal.day} cho nhân viên:\n\n` +
+            `• Tên: ${employeeName}\n` +
+            `• ID: ${employeeIdNum}\n\n` +
+            `Thời gian: ${employeeListModal.startAt} - ${employeeListModal.endAt}`
         );
+
         if (!ok) return;
 
         try {
             setPendingCreateEmployee(true);
+
+            console.log("🔄 Đang đăng ký ca cho nhân viên:", {
+                employeeName,
+                employeeId: employeeIdNum,
+                detailShiftTypeName: employeeListModal.detailShiftTypeName,
+                day: employeeListModal.day,
+                startAt: employeeListModal.startAt,
+                endAt: employeeListModal.endAt,
+                payload
+            });
+
             const res = await scheduleApi.create(payload);
-            console.log("Đăng ký ca thành công từ màn quản lý:", res.data);
+            console.log("✅ Đăng ký ca thành công từ màn quản lý:", res.data);
 
             // Reload lại dữ liệu lịch
             await loadScheduleData();
 
-            window.alert("Đăng ký ca cho nhân viên thành công.");
-            setNewEmployeeId(null);
+            // XÓA NHÂN VIÊN KHỎI DANH SÁCH KHẢ DỤNG
+            setAvailableEmployees(prev => prev.filter(emp => emp.id !== employeeIdNum));
+
+            // Cập nhật modal để hiển thị nhân viên vừa đăng ký
+            setEmployeeListModal((prev) => ({
+                ...prev,
+                employees: [
+                    ...prev.employees,
+                    {
+                        employeeId: employeeIdNum,
+                        name: employeeName,
+                        roleName: "", // Có thể lấy từ selectedEmployee nếu có thông tin role
+                        scheduleId: res.data?.data?.id || res.data?.id
+                    }
+                ]
+            }));
+
+            // Reset selection - chọn nhân viên đầu tiên trong danh sách còn lại
+            setAvailableEmployees(prev => {
+                const updated = prev.filter(emp => emp.id !== employeeIdNum);
+
+                // Set newEmployeeId về nhân viên đầu tiên nếu còn
+                if (updated.length > 0) {
+                    setNewEmployeeId(updated[0].id);
+                } else {
+                    setNewEmployeeId(null);
+                }
+
+                return updated;
+            });
+
+            // Hiển thị thông báo thành công
+            window.alert(`✅ Đăng ký ca "${employeeListModal.detailShiftTypeName}" cho nhân viên "${employeeName}" thành công!`);
+
         } catch (error: any) {
-            console.error("Lỗi khi đăng ký ca từ màn quản lý:", error?.response?.data || error?.message);
+            console.error("❌ Lỗi khi đăng ký ca từ màn quản lý:", error?.response?.data || error?.message);
             const msg = error?.response?.data?.message || error?.message || "Đã xảy ra lỗi khi đăng ký ca.";
-            window.alert(msg);
+            window.alert(`❌ ${msg}\n\nNhân viên: ${employeeName} (ID: ${employeeIdNum})`);
         } finally {
             setPendingCreateEmployee(false);
         }
     };
 
     // Xóa ca đăng ký cho một nhân viên cụ thể từ modal danh sách nhân viên
+    // const handleDeleteScheduleForEmployee = async (employeeName: string) => {
+    //     if (!employeeListModal.show || !employeeListModal.day || !employeeListModal.detailShiftTypeId) return;
+
+    //     const ok = window.confirm(
+    //         `Bạn có chắc muốn xóa ca "${employeeListModal.detailShiftTypeName}" cho nhân viên "${employeeName}" ngày ${employeeListModal.day}?`
+    //     );
+    //     if (!ok) return;
+
+    //     try {
+    //         // Tìm schedule phù hợp theo ngày, detailShiftTypeId và tên nhân viên
+    //         const target = scheduleData.find((s: any) => {
+    //             const regDate = s?.registrationDate;
+    //             const d = toRegistrationDateOnly(regDate);
+    //             if (!d) return false;
+    //             const isSameDay =
+    //                 d.getFullYear() === currentYear &&
+    //                 d.getMonth() === currentMonth &&
+    //                 d.getDate() === employeeListModal.day;
+
+    //             const detailShiftTypeId = s?.detailShiftType?.id;
+    //             const empName = s?.employee?.name;
+
+    //             return (
+    //                 isSameDay &&
+    //                 detailShiftTypeId === employeeListModal.detailShiftTypeId &&
+    //                 empName === employeeName
+    //             );
+    //         });
+
+    //         if (!target?.id) {
+    //             window.alert("Không tìm thấy bản ghi ca làm để xóa cho nhân viên này.");
+    //             return;
+    //         }
+    //         console.log("🔍 [DEBUG] Target schedule ID:", target.id);
+    //         await scheduleApi.delete(target.id);
+
+    //         // Reload lại dữ liệu sau khi xóa
+    //         await loadScheduleData();
+
+    //         // Cập nhật lại danh sách nhân viên trong modal (loại bỏ nhân viên vừa xóa)
+    //         setEmployeeListModal((prev) => ({
+    //             ...prev,
+    //             employees: prev.employees.filter((e) => e.name !== employeeName),
+    //         }));
+    //     } catch (error: any) {
+    //         console.error("Lỗi khi xóa ca từ màn quản lý:", error?.response?.data || error?.message);
+    //         window.alert("Đã xảy ra lỗi khi xóa ca. Vui lòng thử lại.");
+    //     }
+
+    // };
+    // Xóa ca đăng ký cho một nhân viên cụ thể từ modal danh sách nhân viên
+    // Xóa ca đăng ký cho một nhân viên cụ thể từ modal danh sách nhân viên
     const handleDeleteScheduleForEmployee = async (employeeName: string) => {
+        console.log("🔍 [DEBUG] Employee Name:", employeeName);
+        console.log("🔍 [DEBUG] Employee List Modal:", employeeListModal);
+        console.log("🔍 [DEBUG] Schedule Data:", scheduleData);
         if (!employeeListModal.show || !employeeListModal.day || !employeeListModal.detailShiftTypeId) return;
 
         const ok = window.confirm(
             `Bạn có chắc muốn xóa ca "${employeeListModal.detailShiftTypeName}" cho nhân viên "${employeeName}" ngày ${employeeListModal.day}?`
         );
         if (!ok) return;
-
+        console.log("🔍 [DEBUG] Employee ID:", availableEmployees);
         try {
-            // Tìm schedule phù hợp theo ngày, detailShiftTypeId và tên nhân viên
+            // Tìm schedule phù hợp
             const target = scheduleData.find((s: any) => {
                 const regDate = s?.registrationDate;
                 const d = toRegistrationDateOnly(regDate);
@@ -765,24 +918,167 @@ const ScheduleManagement = () => {
 
             await scheduleApi.delete(target.id);
 
-            // Reload lại dữ liệu sau khi xóa
-            await loadScheduleData();
+            // Reload dữ liệu
 
-            // Cập nhật lại danh sách nhân viên trong modal (loại bỏ nhân viên vừa xóa)
+            // Tìm nhân viên vừa xóa
+            const deletedEmployee = employeeListModal.employees.find(emp => emp.name === employeeName);
+            console.log("🔍 [DEBUG] Deleted employee:", deletedEmployee);
+            // Cập nhật modal - loại bỏ nhân viên vừa xóa
             setEmployeeListModal((prev) => ({
                 ...prev,
                 employees: prev.employees.filter((e) => e.name !== employeeName),
             }));
+
+            // Thêm nhân viên vừa xóa vào danh sách khả dụng
+            if (deletedEmployee) {
+
+                // Tạo đối tượng nhân viên mới cho danh sách khả dụng
+                const newAvailableEmployee = {
+                    id: deletedEmployee.employeeId,  // Fallback ID nếu không có
+                    name: deletedEmployee.name,
+                };
+
+                // Cập nhật availableEmployees
+                setAvailableEmployees((prev: any) => {
+                    // tránh trùng nhân viên
+                    const exists = prev.some((e: any) => e.id === deletedEmployee.employeeId);
+                    const updated = exists ? prev : [...prev, newAvailableEmployee];
+
+                    // luôn sync newEmployeeId theo danh sách mới
+                    if (updated.length > 0) {
+                        setNewEmployeeId(updated[0].id);
+                    } else {
+                        setNewEmployeeId(null);
+                    }
+
+                    return updated;
+                });
+
+            }
+            await loadScheduleData();
+            await handleShiftClick(
+                employeeListModal.day,
+                employeeListModal.detailShiftTypeName,
+                employeeListModal.startAt,
+                employeeListModal.endAt,
+                employeeListModal.detailShiftTypeId!
+            );
+
+            window.alert("Xóa ca thành công. Nhân viên đã được thêm vào danh sách khả dụng.");
         } catch (error: any) {
-            console.error("Lỗi khi xóa ca từ màn quản lý:", error?.response?.data || error?.message);
+            console.error("Lỗi khi xóa ca:", error?.response?.data || error?.message);
             window.alert("Đã xảy ra lỗi khi xóa ca. Vui lòng thử lại.");
+        }
+    };
+    // Hàm xử lý submit form độ lệch thời gian
+    const handleSubmitTimeDeviation = async () => {
+        if (!timeDeviationModal.scheduleId) {
+            window.alert("Không tìm thấy schedule ID.");
+            return;
+        }
+
+        try {
+            const timeDeviationValue = timeDeviationForm.timeDeviation.trim() === ""
+                ? undefined
+                : parseInt(timeDeviationForm.timeDeviation, 10);
+
+            if (timeDeviationValue !== undefined && isNaN(timeDeviationValue)) {
+                window.alert("Số phút lệch giờ phải là một số nguyên.");
+                return;
+            }
+
+            const payload: {
+                scheduleId: number;
+                timeDeviation?: number;
+                reason?: string;
+            } = {
+                scheduleId: timeDeviationModal.scheduleId,
+            };
+
+            if (timeDeviationValue !== undefined) {
+                payload.timeDeviation = timeDeviationValue;
+            }
+
+            if (timeDeviationForm.reason.trim() !== "") {
+                payload.reason = timeDeviationForm.reason.trim();
+            }
+
+            const response = await scheduleApi.createOrUpdateShiftTimeDeviation(payload);
+            const updatedDeviation = response.data?.data || response.data;
+
+            // Xác định shiftTimeDeviation mới: nếu timeDeviation và reason đều undefined/null/empty thì không có deviation
+            const hasDeviation = updatedDeviation &&
+                (updatedDeviation.timeDeviation !== undefined && updatedDeviation.timeDeviation !== null) &&
+                (updatedDeviation.timeDeviation !== 0 || updatedDeviation.reason);
+
+            const newShiftTimeDeviation: ShiftTimeDeviation | undefined = hasDeviation
+                ? {
+                    id: updatedDeviation.id || 0,
+                    scheduleId: updatedDeviation.scheduleId || timeDeviationModal.scheduleId!,
+                    timeDeviation: updatedDeviation.timeDeviation ?? 0,
+                    reason: updatedDeviation.reason || "",
+                    reviewStatus: updatedDeviation.reviewStatus ?? false,
+                    createdAt: updatedDeviation.createdAt || new Date().toISOString(),
+                }
+                : undefined;
+
+            // Cập nhật ngay lập tức shiftTimeDeviation của nhân viên trong modal
+            if (employeeListModal.show && timeDeviationModal.scheduleId) {
+                setEmployeeListModal((prev) => ({
+                    ...prev,
+                    employees: prev.employees.map((emp) => {
+                        if (emp.scheduleId === timeDeviationModal.scheduleId) {
+                            return {
+                                ...emp,
+                                shiftTimeDeviation: newShiftTimeDeviation,
+                            };
+                        }
+                        return emp;
+                    }),
+                }));
+            }
+
+            // Cập nhật scheduleData để đồng bộ dữ liệu
+            setScheduleData((prev) => {
+                return prev.map((s: any) => {
+                    if (s.id === timeDeviationModal.scheduleId) {
+                        return {
+                            ...s,
+                            shiftTimeDeviation: newShiftTimeDeviation || null,
+                        };
+                    }
+                    return s;
+                });
+            });
+
+            // Reload lại dữ liệu sau khi cập nhật (chạy ngầm để đồng bộ)
+            loadScheduleData().catch(console.error);
+
+            // Đóng modal
+            setTimeDeviationModal({
+                show: false,
+                scheduleId: null,
+                employeeName: "",
+                currentTimeDeviation: undefined,
+                currentReason: undefined,
+            });
+            setTimeDeviationForm({
+                timeDeviation: "",
+                reason: "",
+            });
+
+            window.alert("Cập nhật độ lệch giờ thành công!");
+        } catch (error: any) {
+            console.error("Lỗi khi cập nhật độ lệch giờ:", error?.response?.data || error?.message);
+            const errorMessage = error?.response?.data?.message || "Đã xảy ra lỗi khi cập nhật độ lệch giờ. Vui lòng thử lại.";
+            window.alert(errorMessage);
         }
     };
 
     // Hàm lấy thông tin schedule theo ngày
     // Nếu có selectedShiftTypeId: trả về chi tiết các ca đăng ký
     // Nếu không: group theo shiftType và đếm
-    const getScheduleInfoForDay = (day: number): Array<{
+    let getScheduleInfoForDay = (day: number): Array<{
         shiftTypeName?: string;
         detailCount?: number;
         shiftTypeId?: number;
@@ -940,7 +1236,41 @@ const ScheduleManagement = () => {
             })
             .sort((a, b) => a.shiftTypeName!.localeCompare(b.shiftTypeName!));
     };
+    // Hàm định dạng thông tin độ lệch thời gian
+    const formatTimeDeviation = (timeDeviation: number): string => {
+        if (timeDeviation === 0) return "";
 
+        const absMinutes = Math.abs(timeDeviation);
+        const hours = Math.floor(absMinutes / 60);
+        const minutes = absMinutes % 60;
+
+        let result = "";
+        if (hours > 0) {
+            result += `${hours} giờ`;
+        }
+        if (minutes > 0) {
+            if (result) result += " ";
+            result += `${minutes} phút`;
+        }
+
+        if (timeDeviation < 0) {
+            return `Về sớm ${result}`;
+        } else {
+            return `Về muộn ${result}`;
+        }
+    };
+
+    // Hàm lấy trạng thái duyệt
+    const getReviewStatusText = (reviewStatus: boolean): string => {
+        return reviewStatus ? "Đã duyệt" : "Chờ duyệt";
+    };
+
+    // Hàm lấy màu sắc cho trạng thái
+    const getReviewStatusColor = (reviewStatus: boolean): string => {
+        return reviewStatus
+            ? "text-green-600 bg-green-100 dark:text-green-400 dark:bg-green-900/40"
+            : "text-yellow-600 bg-yellow-100 dark:text-yellow-400 dark:bg-yellow-900/40";
+    };
     // Tính toán các ô lịch cho tháng hiện tại
     const firstDayOfMonth = new Date(currentYear, currentMonth, 1);
     const startOffset = (firstDayOfMonth.getDay() + 6) % 7; // Chuyển đổi CN = 0 sang T2 = 0
@@ -1298,7 +1628,6 @@ const ScheduleManagement = () => {
                                                                                 time: "text-purple-600 dark:text-purple-300",
                                                                             },
                                                                         ];
-                                                                        const shiftId = Number(info.detailShiftTypeId);
 
                                                                         let style;
 
@@ -1469,114 +1798,241 @@ const ScheduleManagement = () => {
             )}
 
             {employeeListModal.show && (
-                <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center px-4" onClick={() => setEmployeeListModal({ ...employeeListModal, show: false })}>
-                    <div className="bg-white dark:bg-[#111827] rounded-lg shadow-xl max-w-md w-full p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <span className="material-symbols-outlined text-blue-600 dark:text-blue-400 text-3xl">people</span>
-                                <div>
-                                    <h4 className="text-lg font-semibold text-[#111318] dark:text-white">Danh sách nhân viên</h4>
-                                    <p className="text-sm text-[#616f89] dark:text-[#9ca3af]">
-                                        Ngày {employeeListModal.day} - {employeeListModal.detailShiftTypeName}
-                                    </p>
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center px-4 py-6" onClick={() => setEmployeeListModal({ ...employeeListModal, show: false })}>
+                    <div className="bg-white dark:bg-[#111827] rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                        {/* Header với gradient */}
+                        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-700 dark:to-indigo-700 px-6 py-4">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                                        <span className="material-symbols-outlined text-white text-2xl">people</span>
+                                    </div>
+                                    <div>
+                                        <h4 className="text-xl font-bold text-white">Danh sách nhân viên</h4>
+                                        <p className="text-sm text-blue-100 mt-0.5">
+                                            {(() => {
+                                                const day = employeeListModal.day;
+                                                const formattedDate = `${String(day).padStart(2, "0")}/${String(currentMonth + 1).padStart(2, "0")}/${currentYear}`;
+                                                return `Ngày ${formattedDate} - ${employeeListModal.detailShiftTypeName}`;
+                                            })()}
+                                        </p>
+                                    </div>
                                 </div>
+                                <button
+                                    onClick={() => setEmployeeListModal({ ...employeeListModal, show: false })}
+                                    className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 text-white transition-colors flex items-center justify-center"
+                                >
+                                    <span className="material-symbols-outlined text-lg">close</span>
+                                </button>
                             </div>
-                            <button
-                                onClick={() => setEmployeeListModal({ ...employeeListModal, show: false })}
-                                className="text-[#616f89] dark:text-[#9ca3af] hover:text-[#111318] dark:hover:text-white"
-                            >
-                                <span className="material-symbols-outlined">close</span>
-                            </button>
                         </div>
-                        <div className="border border-[#dbdfe6] dark:border-[#4b5563] rounded-lg p-4 bg-blue-50 dark:bg-blue-900/20">
-                            <div className="flex items-center gap-2 mb-2">
-                                <span className="material-symbols-outlined text-blue-600 dark:text-blue-400 text-sm">schedule</span>
-                                <span className="text-sm font-medium text-[#111318] dark:text-white">
-                                    {employeeListModal.startAt} - {employeeListModal.endAt}
-                                </span>
-                            </div>
-                            {(() => {
-                                const userCount = employeeListModal.employees.filter(e => (e.roleName || "").toUpperCase() === "USER").length;
-                                const managerCount = employeeListModal.employees.filter(e => (e.roleName || "").toUpperCase() === "MANAGER").length;
-                                const total = employeeListModal.employees.length;
-                                return (
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        <div className="flex items-center gap-2">
-                                            <span className="material-symbols-outlined text-blue-600 dark:text-blue-400 text-sm">person</span>
-                                            <span className="text-sm text-[#111318] dark:text-white">
-                                                Tổng số: {total} người
+
+                        {/* Content area với scroll */}
+                        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+                            {/* Thông tin ca làm việc */}
+                            <div className="bg-gradient-to-br from-blue-50 via-indigo-50 to-blue-50 dark:from-blue-900/30 dark:via-indigo-900/20 dark:to-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-xl p-4 shadow-sm">
+                                <div className="flex items-center gap-3 mb-3">
+                                    <div className="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center">
+                                        <span className="material-symbols-outlined text-blue-600 dark:text-blue-400">schedule</span>
+                                    </div>
+                                    <div className="flex-1">
+                                        <p className="text-xs text-blue-600 dark:text-blue-400 font-medium mb-0.5">Thời gian ca làm việc</p>
+                                        <p className="text-base font-bold text-[#111318] dark:text-white">
+                                            {employeeListModal.startAt} - {employeeListModal.endAt}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {(() => {
+                                    const userCount = employeeListModal.employees.filter(e => (e.roleName || "").toUpperCase() === "USER").length;
+                                    const managerCount = employeeListModal.employees.filter(e => (e.roleName || "").toUpperCase() === "MANAGER").length;
+                                    const total = employeeListModal.employees.length;
+                                    return (
+                                        <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-blue-200 dark:border-blue-700">
+                                            <div className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-blue-900/30 rounded-lg">
+                                                <span className="material-symbols-outlined text-blue-600 dark:text-blue-400 text-base">groups</span>
+                                                <span className="text-sm font-semibold text-[#111318] dark:text-white">
+                                                    Tổng: {total} người
+                                                </span>
+                                            </div>
+                                            <span className="inline-flex items-center gap-1 px-3 py-1.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 text-xs font-semibold rounded-lg">
+                                                <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                                                USER: {userCount}
+                                            </span>
+                                            <span className="inline-flex items-center gap-1 px-3 py-1.5 bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 text-xs font-semibold rounded-lg">
+                                                <span className="w-2 h-2 rounded-full bg-indigo-500"></span>
+                                                MANAGER: {managerCount}
                                             </span>
                                         </div>
-                                        <span className="text-[11px] font-semibold text-blue-800 dark:text-blue-200 bg-blue-100 dark:bg-blue-900/40 px-2 py-0.5 rounded-full">
-                                            USER: {userCount}
-                                        </span>
-                                        <span className="text-[11px] font-semibold text-blue-800 dark:text-blue-200 bg-blue-100 dark:bg-blue-900/40 px-2 py-0.5 rounded-full">
-                                            MANAGER: {managerCount}
-                                        </span>
-                                    </div>
-                                );
-                            })()}
-                        </div>
-                        <div className="border border-[#dbdfe6] dark:border-[#4b5563] rounded-lg max-h-[400px] overflow-y-auto">
-                            {employeeListModal.employees.length > 0 ? (
-                                <div className="divide-y divide-[#dbdfe6] dark:divide-[#4b5563]">
-                                    {employeeListModal.employees.map((employee, idx) => (
-                                        <div key={idx} className="p-3 hover:bg-gray-50 dark:hover:bg-[#1f2937] transition-colors">
+                                    );
+                                })()}
+
+                            </div>
+
+                            {/* Cảnh báo độ lệch giờ */}
+                            {(() => {
+                                const hasTimeDeviations = employeeListModal.employees.some(emp => emp.shiftTimeDeviation);
+                                const pendingReviews = employeeListModal.employees.filter(
+                                    emp => emp.shiftTimeDeviation && !emp.shiftTimeDeviation.reviewStatus
+                                ).length;
+
+                                if (hasTimeDeviations) {
+                                    return (
+                                        <div className="bg-gradient-to-r from-amber-50 to-yellow-50 dark:from-amber-900/30 dark:to-yellow-900/20 border border-amber-200 dark:border-amber-700 rounded-xl p-3 shadow-sm">
                                             <div className="flex items-center gap-3">
-                                                <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center">
-                                                    <span className="material-symbols-outlined text-blue-600 dark:text-blue-400 text-sm">person</span>
+                                                <div className="w-10 h-10 rounded-lg bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center flex-shrink-0">
+                                                    <span className="material-symbols-outlined text-amber-600 dark:text-amber-400">warning</span>
                                                 </div>
                                                 <div className="flex-1">
-                                                    <div className="flex items-center justify-between gap-2">
-                                                        <div className="font-medium text-[#111318] dark:text-white">
-                                                            {employee.name}
+                                                    <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+                                                        Có {employeeListModal.employees.filter(emp => emp.shiftTimeDeviation).length} nhân viên có độ lệch giờ
+                                                    </p>
+                                                </div>
+                                                {pendingReviews > 0 && (
+                                                    <span className="inline-flex items-center gap-1 px-3 py-1.5 bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 text-xs font-bold rounded-lg">
+                                                        <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                                                        {pendingReviews} chờ duyệt
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                }
+                                return null;
+                            })()}
+
+                            {/* Danh sách nhân viên */}
+                            <div className="space-y-3">
+                                <h5 className="text-sm font-semibold text-[#111318] dark:text-white px-1">Danh sách nhân viên</h5>
+                                {employeeListModal.employees.length > 0 ? (
+                                    <div className="space-y-2">
+                                        {employeeListModal.employees.map((employee, idx) => (
+                                            <div key={idx} className="bg-white dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl p-4 hover:shadow-md transition-all duration-200 hover:border-blue-300 dark:hover:border-blue-600">
+                                                <div className="flex items-start gap-4">
+                                                    {/* Avatar và icon */}
+                                                    <div className="flex flex-col items-center gap-2 flex-shrink-0">
+                                                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/50 dark:to-indigo-900/50 flex items-center justify-center shadow-sm">
+                                                            <span className="material-symbols-outlined text-blue-600 dark:text-blue-400 text-xl">person</span>
                                                         </div>
-                                                        <div className="flex items-center gap-2">
-                                                            {employee.roleName && (
-                                                                <span className="inline-flex items-center rounded-full bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 text-[11px] font-semibold text-blue-700 dark:text-blue-200">
-                                                                    {employee.roleName}
-                                                                </span>
-                                                            )}
+                                                        {employee.shiftTimeDeviation && (
+                                                            <div className="w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center shadow-sm">
+                                                                <span className="material-symbols-outlined text-amber-600 dark:text-amber-400 text-sm">schedule</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Nội dung chính */}
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex items-start justify-between gap-3 mb-2">
+                                                            <div className="flex-1 min-w-0">
+                                                                <h6 className="text-base font-semibold text-[#111318] dark:text-white mb-1 truncate">
+                                                                    {employee.name}
+                                                                </h6>
+                                                                {employee.phone && !employee.shiftTimeDeviation && (
+                                                                    <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                                                                        <span className="material-symbols-outlined text-xs">phone</span>
+                                                                        {employee.phone}
+                                                                    </p>
+                                                                )}
+                                                            </div>
+                                                            <div className="flex items-center gap-2 flex-shrink-0">
+                                                                {employee.roleName && (
+                                                                    <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-semibold border border-blue-200 dark:border-blue-700">
+                                                                        {employee.roleName}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Thông tin độ lệch thời gian */}
+                                                        {employee.shiftTimeDeviation && (
+                                                            <div className="mt-3 p-3 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800/50 dark:to-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                                                                <div className="flex items-center justify-between mb-2">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="material-symbols-outlined text-amber-600 dark:text-amber-400 text-base">schedule</span>
+                                                                        <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+                                                                            {formatTimeDeviation(employee.shiftTimeDeviation.timeDeviation)}
+                                                                        </span>
+                                                                    </div>
+                                                                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold ${getReviewStatusColor(employee.shiftTimeDeviation.reviewStatus)}`}>
+                                                                        {employee.shiftTimeDeviation.reviewStatus ? (
+                                                                            <span className="material-symbols-outlined text-xs">check_circle</span>
+                                                                        ) : (
+                                                                            <span className="material-symbols-outlined text-xs">pending</span>
+                                                                        )}
+                                                                        {getReviewStatusText(employee.shiftTimeDeviation.reviewStatus)}
+                                                                    </span>
+                                                                </div>
+                                                                {employee.shiftTimeDeviation.reason && (
+                                                                    <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-600">
+                                                                        <p className="text-xs text-gray-600 dark:text-gray-400">
+                                                                            <span className="font-medium text-gray-700 dark:text-gray-300">Lý do:</span> {employee.shiftTimeDeviation.reason}
+                                                                        </p>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        )}
+
+                                                        {/* Nút hành động */}
+                                                        <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    if (employee.scheduleId) {
+                                                                        setTimeDeviationModal({
+                                                                            show: true,
+                                                                            scheduleId: employee.scheduleId,
+                                                                            employeeName: employee.name,
+                                                                            currentTimeDeviation: employee.shiftTimeDeviation?.timeDeviation,
+                                                                            currentReason: employee.shiftTimeDeviation?.reason,
+                                                                        });
+                                                                        setTimeDeviationForm({
+                                                                            timeDeviation: employee.shiftTimeDeviation?.timeDeviation?.toString() || "",
+                                                                            reason: employee.shiftTimeDeviation?.reason || "",
+                                                                        });
+                                                                    }
+                                                                }}
+                                                                className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-blue-300 dark:border-blue-600 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-semibold hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors shadow-sm"
+                                                            >
+                                                                <span className="material-symbols-outlined text-base">schedule</span>
+                                                                Độ lệch giờ
+                                                            </button>
                                                             <button
                                                                 type="button"
                                                                 onClick={() => handleDeleteScheduleForEmployee(employee.name)}
-                                                                className="inline-flex items-center px-2 py-0.5 rounded-md border border-red-200 dark:border-red-500 text-[11px] text-red-600 dark:text-red-300 bg-red-50 dark:bg-red-900/30 hover:bg-red-100 dark:hover:bg-red-900/60 transition-colors"
+                                                                className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-red-300 dark:border-red-600 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-xs font-semibold hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors shadow-sm"
                                                             >
-                                                                <span className="material-symbols-outlined text-[14px] mr-0.5">delete</span>
+                                                                <span className="material-symbols-outlined text-base">delete</span>
                                                                 Xóa ca
                                                             </button>
                                                         </div>
                                                     </div>
-                                                    {employee.phone && (
-                                                        <div className="text-xs text-[#616f89] dark:text-[#9ca3af] mt-0.5">
-                                                            {employee.phone}
-                                                        </div>
-                                                    )}
                                                 </div>
                                             </div>
-                                        </div>
-                                    ))}
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="p-12 text-center bg-gray-50 dark:bg-gray-800/30 rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-600">
+                                        <span className="material-symbols-outlined text-5xl text-gray-400 dark:text-gray-500 mb-3 block">person_off</span>
+                                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Không có nhân viên nào đăng ký ca này</p>
+                                    </div>
+                                )}
+                            </div>
+                            {/* Đăng ký thêm ca */}
+                            <div className="bg-gray-50 dark:bg-gray-800/30 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+                                <div className="flex items-center gap-2 mb-3">
+                                    <span className="material-symbols-outlined text-blue-600 dark:text-blue-400">person_add</span>
+                                    <h5 className="text-sm font-semibold text-[#111318] dark:text-white">
+                                        Đăng ký thêm ca cho nhân viên
+                                    </h5>
                                 </div>
-                            ) : (
-                                <div className="p-8 text-center text-[#616f89] dark:text-[#9ca3af]">
-                                    <span className="material-symbols-outlined text-4xl mb-2">person_off</span>
-                                    <p>Không có nhân viên nào đăng ký ca này</p>
-                                </div>
-                            )}
-                        </div>
-                        <div className="mt-4 flex flex-col gap-3">
-                            <div className="border-t border-[#dbdfe6] dark:border-[#4b5563] pt-3">
-                                <h5 className="text-sm font-semibold text-[#111318] dark:text-white mb-2">
-                                    Đăng ký thêm ca cho nhân viên
-                                </h5>
-                                <p className="text-xs text-[#616f89] dark:text-[#9ca3af] mb-2">
-                                    Chọn <strong>nhân viên</strong> từ danh sách để đăng ký ca này cho họ. Chỉ ADMIN hoặc MANAGER đúng
-                                    supplier mới có quyền.
+                                <p className="text-xs text-gray-600 dark:text-gray-400 mb-3 leading-relaxed">
+                                    Chọn <strong className="text-gray-700 dark:text-gray-300">nhân viên</strong> từ danh sách để đăng ký ca này cho họ. Chỉ ADMIN hoặc MANAGER đúng supplier mới có quyền.
                                 </p>
                                 <div className="flex flex-col gap-2">
                                     <div className="flex items-center gap-2">
                                         <select
-                                            className="flex-1 px-3 py-2 border border-[#dbdfe6] dark:border-[#4b5563] rounded-lg bg-white dark:bg-[#111827] text-sm text-[#111318] dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                            className="flex-1 px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm text-[#111318] dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                             value={newEmployeeId ?? ""}
                                             onChange={(e) =>
                                                 setNewEmployeeId(e.target.value ? Number(e.target.value) : null)
@@ -1586,7 +2042,7 @@ const ScheduleManagement = () => {
                                             <option value="">Chọn nhân viên...</option>
                                             {availableEmployees.map((emp) => (
                                                 <option key={emp.id} value={emp.id}>
-                                                    #{emp.id} - {emp.name}
+                                                    {emp.name}
                                                 </option>
                                             ))}
                                         </select>
@@ -1594,32 +2050,136 @@ const ScheduleManagement = () => {
                                             type="button"
                                             onClick={handleCreateScheduleForEmployee}
                                             disabled={pendingCreateEmployee || !newEmployeeId}
-                                            className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700 text-sm disabled:opacity-60"
+                                            className="px-5 py-2.5 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg flex items-center gap-2"
                                         >
-                                            {pendingCreateEmployee ? "Đang đăng ký..." : "Đăng ký ca"}
+                                            {pendingCreateEmployee ? (
+                                                <>
+                                                    <span className="material-symbols-outlined text-base animate-spin">refresh</span>
+                                                    Đang đăng ký...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <span className="material-symbols-outlined text-base">add_circle</span>
+                                                    Đăng ký ca
+                                                </>
+                                            )}
                                         </button>
                                     </div>
                                     {loadingEmployees && (
-                                        <p className="text-xs text-[#616f89] dark:text-[#9ca3af]">
-                                            Đang tải danh sách nhân viên...
-                                        </p>
+                                        <div className="flex items-center gap-2 text-xs text-blue-600 dark:text-blue-400">
+                                            <span className="material-symbols-outlined text-sm animate-spin">refresh</span>
+                                            <span>Đang tải danh sách nhân viên...</span>
+                                        </div>
                                     )}
                                     {!loadingEmployees && availableEmployees.length === 0 && (
-                                        <p className="text-xs text-[#9ca3af]">
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                                            <span className="material-symbols-outlined text-sm">info</span>
                                             Không có nhân viên khả dụng để đăng ký ca này.
                                         </p>
                                     )}
                                 </div>
                             </div>
-                            <div className="flex justify-end">
+                        </div>
+
+                        {/* Footer */}
+                        <div className="px-6 py-4 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700 flex justify-end">
+                            <button
+                                className="px-6 py-2.5 rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 text-sm font-semibold transition-colors"
+                                onClick={() => setEmployeeListModal({ ...employeeListModal, show: false })}
+                            >
+                                Đóng
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {timeDeviationModal.show && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center px-4" onClick={() => setTimeDeviationModal({ ...timeDeviationModal, show: false })}>
+                    <div className="bg-white dark:bg-[#111827] rounded-xl shadow-2xl max-w-md w-full overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                        {/* Header với gradient */}
+                        <div className="bg-gradient-to-r from-amber-500 to-orange-500 dark:from-amber-600 dark:to-orange-600 px-6 py-4">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                                        <span className="material-symbols-outlined text-white text-2xl">schedule</span>
+                                    </div>
+                                    <div>
+                                        <h4 className="text-xl font-bold text-white">Độ lệch thời gian</h4>
+                                        <p className="text-sm text-amber-100 mt-0.5">
+                                            Nhân viên: {timeDeviationModal.employeeName}
+                                        </p>
+                                    </div>
+                                </div>
                                 <button
-                                    className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700 text-sm"
-                                    onClick={() => setEmployeeListModal({ ...employeeListModal, show: false })}
-                                // a
+                                    onClick={() => setTimeDeviationModal({ ...timeDeviationModal, show: false })}
+                                    className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 text-white transition-colors flex items-center justify-center"
                                 >
-                                    Đóng
+                                    <span className="material-symbols-outlined text-lg">close</span>
                                 </button>
                             </div>
+                        </div>
+
+                        {/* Content */}
+                        <div className="px-6 py-5 space-y-5">
+                            <div>
+                                <label className="block text-sm font-semibold text-[#111318] dark:text-white mb-2 flex items-center gap-2">
+                                    <span className="material-symbols-outlined text-base text-blue-600 dark:text-blue-400">timer</span>
+                                    Số phút lệch giờ
+                                </label>
+                                <input
+                                    type="number"
+                                    value={timeDeviationForm.timeDeviation}
+                                    onChange={(e) => setTimeDeviationForm({ ...timeDeviationForm, timeDeviation: e.target.value })}
+                                    placeholder="Ví dụ: -30 (về sớm), 60 (tăng ca)"
+                                    className="w-full px-4 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-sm text-[#111318] dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all"
+                                />
+                                <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-700">
+                                    <p className="text-xs text-blue-800 dark:text-blue-300 leading-relaxed">
+                                        <span className="font-semibold">• Số âm:</span> Về sớm hoặc đi muộn (ví dụ: -30 = về sớm 30 phút)
+                                        <br />
+                                        <span className="font-semibold">• Số dương:</span> Tăng ca (ví dụ: 60 = tăng ca 60 phút)
+                                        <br />
+                                        <span className="font-semibold">• Để trống:</span> Không có độ lệch
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-semibold text-[#111318] dark:text-white mb-2 flex items-center gap-2">
+                                    <span className="material-symbols-outlined text-base text-blue-600 dark:text-blue-400">description</span>
+                                    Lý do
+                                </label>
+                                <textarea
+                                    value={timeDeviationForm.reason}
+                                    onChange={(e) => setTimeDeviationForm({ ...timeDeviationForm, reason: e.target.value })}
+                                    placeholder="Nhập lý do độ lệch thời gian..."
+                                    rows={4}
+                                    className="w-full px-4 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-sm text-[#111318] dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 resize-none transition-all"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Footer */}
+                        <div className="px-6 py-4 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setTimeDeviationModal({ ...timeDeviationModal, show: false });
+                                    setTimeDeviationForm({ timeDeviation: "", reason: "" });
+                                }}
+                                className="px-5 py-2.5 rounded-lg border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 text-sm font-semibold transition-colors"
+                            >
+                                Hủy
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleSubmitTimeDeviation}
+                                className="px-5 py-2.5 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-sm font-semibold transition-all shadow-md hover:shadow-lg flex items-center gap-2"
+                            >
+                                <span className="material-symbols-outlined text-base">save</span>
+                                Lưu
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -1783,6 +2343,7 @@ const ScheduleManagement = () => {
 
                                     try {
                                         await scheduleApi.create(payload);
+                                        console.log("Đăng ký ca thành công:", payload);
                                         await loadScheduleData();
                                         window.alert("Đăng ký ca thành công.");
                                         setRegisterModal({ ...registerModal, show: false });
