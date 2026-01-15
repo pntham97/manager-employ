@@ -9,7 +9,7 @@ import { tokenService } from "../utils/token";
 
 const SidebarLeft: React.FC = () => {
     const location = useLocation();
-    const [openPartner] = useState(false);
+    const [openPartner, setOpenPartner] = useState(false);
     const [collapsed] = useState(false);
     const [showProfileModal, setShowProfileModal] = useState(false);
     const [showPasswordModal, setShowPasswordModal] = useState(false);
