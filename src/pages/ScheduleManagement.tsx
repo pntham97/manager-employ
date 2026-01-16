@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { scheduleApi } from "../api/schedule.api";
 import { shiftTypeSupplierApi } from "../api/shiftTypeSupplier.api";
 import { employeeApi, type EmployeeResponse } from "../api/employee.api";
+import { toast } from "react-toastify";
 
 interface RegisterDetail {
     id: number;
@@ -880,16 +881,17 @@ const ScheduleManagement = () => {
     // Xóa ca đăng ký cho một nhân viên cụ thể từ modal danh sách nhân viên
     // Xóa ca đăng ký cho một nhân viên cụ thể từ modal danh sách nhân viên
     const handleDeleteScheduleForEmployee = async (employeeName: string) => {
-        console.log("🔍 [DEBUG] Employee Name:", employeeName);
-        console.log("🔍 [DEBUG] Employee List Modal:", employeeListModal);
-        console.log("🔍 [DEBUG] Schedule Data:", scheduleData);
+        // console.log("🔍 [DEBUG] Employee Name:", employeeName);
+        // console.log("🔍 [DEBUG] Employee List Modal:", employeeListModal);
+        // console.log("🔍 [DEBUG] Schedule Data:", scheduleData);
         if (!employeeListModal.show || !employeeListModal.day || !employeeListModal.detailShiftTypeId) return;
 
         const ok = window.confirm(
             `Bạn có chắc muốn xóa ca "${employeeListModal.detailShiftTypeName}" cho nhân viên "${employeeName}" ngày ${employeeListModal.day}?`
         );
         if (!ok) return;
-        console.log("🔍 [DEBUG] Employee ID:", availableEmployees);
+        // console.log("🔍 [DEBUG] Employee ID:", availableEmployees);
+        const toastId = "delete-schedule-success";
         try {
             // Tìm schedule phù hợp
             const target = scheduleData.find((s: any) => {
@@ -917,11 +919,16 @@ const ScheduleManagement = () => {
             }
 
             await scheduleApi.delete(target.id);
-
+            toast.success("Xóa ca thành công. Nhân viên đã được thêm vào danh sách khả dụng.", {
+                toastId,
+                autoClose: 3000,
+            });
             // Reload dữ liệu
 
             // Tìm nhân viên vừa xóa
-            const deletedEmployee = employeeListModal.employees.find(emp => emp.name === employeeName);
+            const deletedEmployee = employeeListModal.employees.find(
+                emp => emp.name === employeeName
+            );
             console.log("🔍 [DEBUG] Deleted employee:", deletedEmployee);
             // Cập nhật modal - loại bỏ nhân viên vừa xóa
             setEmployeeListModal((prev) => ({
@@ -955,6 +962,7 @@ const ScheduleManagement = () => {
                 });
 
             }
+
             await loadScheduleData();
             await handleShiftClick(
                 employeeListModal.day,
@@ -964,7 +972,38 @@ const ScheduleManagement = () => {
                 employeeListModal.detailShiftTypeId!
             );
 
-            window.alert("Xóa ca thành công. Nhân viên đã được thêm vào danh sách khả dụng.");
+            if (deletedEmployee?.employeeId != null) {
+                setAvailableEmployees((prev: any) => {
+                    const exists = prev.some((e: any) => e.id === deletedEmployee.employeeId);
+                    return exists
+                        ? prev
+                        : [...prev, { id: deletedEmployee.employeeId, name: deletedEmployee.name }];
+                });
+
+                setNewEmployeeId(deletedEmployee.employeeId);
+            }
+            setEmployeeListModal((prev) => ({
+                ...prev,
+                show: false,
+            }));
+
+            setTimeout(() => {
+                setEmployeeListModal((prev) => ({
+                    ...prev,
+                    show: true,
+                    employees: prev.employees.filter((e) => e.name !== employeeName),
+                }));
+
+                // 🔥 UPDATE TOAST sau khi modal remount
+                toast.update(toastId, {
+                    render: "Xóa ca thành công. Nhân viên đã được thêm vào danh sách khả dụng.",
+                    type: "success",
+                    isLoading: false,
+                    autoClose: 3000,
+                });
+            }, 0);
+
+
         } catch (error: any) {
             console.error("Lỗi khi xóa ca:", error?.response?.data || error?.message);
             window.alert("Đã xảy ra lỗi khi xóa ca. Vui lòng thử lại.");

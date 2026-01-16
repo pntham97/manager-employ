@@ -1,10 +1,17 @@
 import AppRoutes from "./routes/AppRoutes";
-import { Toaster } from "react-hot-toast";
+import { ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 function App() {
   return (
     <>
-      <Toaster position="top-right" reverseOrder={false} />
+      <ToastContainer
+        position="top-right"
+        autoClose={3000}
+        newestOnTop
+        closeOnClick
+        pauseOnHover
+      />
       {/* các component khác */}
       <AppRoutes />
     </>

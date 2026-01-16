@@ -192,10 +192,10 @@ const Wage: React.FC = () => {
             return;
         }
         const res = await employeeApi.getWorkTime({
-            employeeId: selectedEmployeeId || 0,
-            employee: employees.find(
-                (item) => item.employeeId === selectedEmployeeId
-            )?.name || "",
+            // employeeName: employees.find(
+            //     (item) => item.employeeId === selectedEmployeeId
+            // )?.name || "",
+            employeeName: "nhuhmt",
             fromDate: fromDate,
             toDate: toDate,
         });

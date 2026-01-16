@@ -204,13 +204,12 @@ export const employeeApi = {
 
     getWorkTime(
         params: {
-            employeeId: number;
-            employee: string;
+            employeeName: string;
             fromDate: string; // yyyy-MM-dd
             toDate: string;   // yyyy-MM-dd
         }
     ): Promise<ApiResponse<WorkTimeResponse>> {
-        return axiosClient.get("/employees/worktime", {
+        return axiosClient.get("/salary/summary", {
             params,
         });
     },

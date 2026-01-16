@@ -597,9 +597,9 @@ const ManagerEmploy = () => {
         text-text-main-light dark:text-text-main-dark
         inline-flex items-center justify-center gap-2
         shadow-sm
-        hover:bg-gray-50 dark:hover:bg-gray-700
-        hover:border-primary
-        hover:text-primary
+        hover:bg-blue-500 dark:hover:bg-gray-700
+        hover:border-blue-500
+        hover:text-white
         transition-all
         focus:outline-none focus:ring-2 focus:ring-primary/40
         active:scale-[0.97]

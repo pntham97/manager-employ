@@ -363,11 +363,11 @@ const Dashboard: React.FC = () => {
                                                 {/* Chấm tròn */}
                                                 <div
                                                     className={`
-              absolute -left-[21px] mt-1.5
-              w-2.5 h-2.5 rounded-full
-              ring-4 ring-white dark:ring-[#1A202C]
-              transition-all duration-200
-              ${isActive
+                                                             absolute -left-[21px] mt-1.5
+                                                             w-2.5 h-2.5 rounded-full
+                                                             ring-4 ring-white dark:ring-[#1A202C]
+                                                             transition-all duration-200
+                                                             ${isActive
                                                             ? "bg-blue-500 scale-110"
                                                             : "bg-gray-300 dark:bg-gray-600"
                                                         }
