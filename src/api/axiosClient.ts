@@ -114,7 +114,26 @@ axiosClient.interceptors.request.use((config) => {
 //     return Promise.reject(error);
 //   }
 // );
+axiosClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const status = error?.response?.status;
 
+    if (status === 401 || status === 403) {
+      // ❗ XÓA TOÀN BỘ AUTH
+      localStorage.removeItem("accessToken");
+      localStorage.removeItem("refreshToken");
+      localStorage.removeItem("employee");
+
+      // ❗ TRÁNH LOOP
+      if (!window.location.pathname.includes("/login")) {
+        window.location.href = "/login";
+      }
+    }
+
+    return Promise.reject(error);
+  }
+);
 axiosClient.interceptors.response.use(
   // (res) => res,
   // (error) => {

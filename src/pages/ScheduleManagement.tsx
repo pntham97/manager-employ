@@ -582,25 +582,16 @@ const ScheduleManagement = () => {
         endAt: string,
         detailShiftTypeId: number
     ) => {
+        // 1️⃣ Lấy danh sách nhân viên trong ca
         const employeesInShift = getEmployeesForShift(day, detailShiftTypeId);
-        console.log("🔍 [DEBUG] Employees in shift:", employeesInShift);
-        console.log("🔍 [DEBUG] Employees:", employeeListModal.employees);
-        setEmployeeListModal({
-            show: true,
-            day,
-            detailShiftTypeName,
-            startAt,
-            endAt,
-            detailShiftTypeId,
-            employees: employeesInShift,
-        });
 
-        // Reset danh sách nhân viên khả dụng & lựa chọn hiện tại
+        // 2️⃣ Reset state trước
         setAvailableEmployees([]);
         setNewEmployeeId(null);
 
-        // Xác định supplierId dùng cho API lấy danh sách nhân viên (GET /employee/list)
-        let supplierIdForApi: number | undefined = undefined;
+        // 3️⃣ Xác định supplierId
+        let supplierIdForApi: number | undefined;
+
         if (isAdmin) {
             if (!selectedSupplierId) {
                 window.alert("Vui lòng chọn supplier trước khi xem danh sách nhân viên.");
@@ -608,93 +599,77 @@ const ScheduleManagement = () => {
             }
             supplierIdForApi = selectedSupplierId;
         } else {
-            const employeeStr = localStorage.getItem("employee");
-            if (!employeeStr) {
-                console.warn("Không tìm thấy thông tin employee trong localStorage khi mở modal danh sách nhân viên.");
-                return;
-            }
             try {
+                const employeeStr = localStorage.getItem("employee");
+                if (!employeeStr) return;
                 const employee = JSON.parse(employeeStr);
                 supplierIdForApi = employee?.supplierId;
             } catch {
-                console.warn("Lỗi đọc thông tin employee từ localStorage khi mở modal danh sách nhân viên.");
                 return;
             }
         }
 
-        if (!supplierIdForApi) {
-            return;
-        }
+        if (!supplierIdForApi) return;
 
         try {
             setLoadingEmployees(true);
+
+            // 4️⃣ Fetch danh sách nhân viên
             const res = await employeeApi.getList(0, 1000, undefined, supplierIdForApi);
             const pageData = res.data?.data ?? res.data;
             const employeeContent = pageData?.content ?? pageData ?? [];
-            const employees = (Array.isArray(employeeContent) ? employeeContent : []) as EmployeeResponse[];
+            const employees = Array.isArray(employeeContent)
+                ? (employeeContent as EmployeeResponse[])
+                : [];
 
+            // 5️⃣ Map dữ liệu
             const mapped = employees.map((e) => ({
                 id: e.employeeId,
                 name: e.name,
             }));
 
-            // Loại bỏ những nhân viên đã đăng ký ca này khỏi danh sách
-            // Tạo Set chứa employeeId đã đăng ký
+            // 6️⃣ Filter nhân viên đã đăng ký
             const registeredEmployeeIds = new Set(
-                employeeListModal.employees
+                employeesInShift
                     .map((emp) => emp.employeeId)
-                    .filter((id): id is number => id !== undefined && id !== null)
+                    .filter((id): id is number => id != null)
             );
 
-            // Tạo Set chứa tên nhân viên đã đăng ký (fallback nếu không có employeeId)
             const registeredEmployeeNames = new Set(
                 employeesInShift
                     .map((emp) => emp.name?.toLowerCase().trim())
-                    .filter((name): name is string => !!name)
+                    .filter(Boolean)
             );
 
-            // Filter: loại bỏ nếu có employeeId khớp HOẶC tên khớp
             const filteredMapped = mapped.filter((emp) => {
-                // Nếu có employeeId trong danh sách đã đăng ký → loại bỏ
-                if (registeredEmployeeIds.has(emp.id)) {
-                    return false;
-                }
-                // Nếu tên khớp với nhân viên đã đăng ký → loại bỏ (fallback)
-                if (registeredEmployeeNames.has(emp.name?.toLowerCase().trim() || "")) {
-                    return false;
-                }
+                if (registeredEmployeeIds.has(emp.id)) return false;
+                if (registeredEmployeeNames.has(emp.name.toLowerCase().trim())) return false;
                 return true;
             });
 
-            // Debug log
-            console.log("🔍 [DEBUG] Filter employees:", {
-                EmployeeListModal: employeeListModal.employees,
-                registeredCount: employeesInShift.length,
-                registeredIds: Array.from(registeredEmployeeIds),
-                registeredNames: Array.from(registeredEmployeeNames),
-                employees: employees,
-                filteredCount: filteredMapped.length,
-                availableEmployees: availableEmployees,
+            // 7️⃣ SET STATE TRƯỚC
+            setAvailableEmployees(filteredMapped);
+            setNewEmployeeId(filteredMapped[0]?.id ?? null);
+
+            // 8️⃣ 👉 CHỈ LÚC NÀY MỚI OPEN MODAL
+            setEmployeeListModal({
+                show: true,
+                day,
+                detailShiftTypeName,
+                startAt,
+                endAt,
+                detailShiftTypeId,
+                employees: employeesInShift,
             });
 
-            setAvailableEmployees(filteredMapped);
-
-            // Mặc định chọn nhân viên đầu tiên nếu chưa chọn
-            if (filteredMapped.length > 0) {
-                setNewEmployeeId((prev) => prev ?? filteredMapped[0].id);
-            } else {
-                setNewEmployeeId(null);
-            }
         } catch (error: any) {
-            console.error(
-                "Lỗi khi tải danh sách nhân viên (GET /employee/list) cho modal danh sách nhân viên:",
-                error?.response?.data || error?.message
-            );
-            window.alert("Không thể tải danh sách nhân viên. Vui lòng thử lại.");
+            console.error("Lỗi load employee list:", error);
+            window.alert("Không thể tải danh sách nhân viên.");
         } finally {
             setLoadingEmployees(false);
         }
     };
+
 
     // Đăng ký ca cho nhân viên từ modal danh sách nhân viên
     const handleCreateScheduleForEmployee = async () => {
