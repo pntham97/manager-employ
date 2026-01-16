@@ -54,7 +54,9 @@ axiosClient.interceptors.response.use(
       isRefreshing = true;
 
       try {
+        console.log("🔍 [DEBUG] Refreshing token");
         const res = await authApi.refreshToken();
+        console.log("🔍 [DEBUG] Refresh token response:", res.data);
         const newAccessToken = res.data.accessToken;
         const NewrefreshToken = res.data.refreshToken;
         tokenService.setTokens(newAccessToken, NewrefreshToken);

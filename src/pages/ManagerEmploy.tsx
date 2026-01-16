@@ -251,7 +251,7 @@ const ManagerEmploy = () => {
     // Gọi API khi component mount hoặc page/size/employeeName/selectedSupplierId thay đổi
     useEffect(() => {
         fetchEmployees(page, size, employeeName || undefined, selectedSupplierId, selectedCompanyId);
-    }, [page, size, employeeName, selectedSupplierId, selectedCompanyId]);
+    }, [page, size, employeeName,]);
 
     // Hàm reload list dựa trên tham số hiện tại (phục vụ auto refresh khi inactivity)
     const reloadEmployees = useCallback(() => {

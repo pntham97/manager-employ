@@ -202,6 +202,7 @@ const ScheduleManagement = () => {
             // Với MANAGER, không truyền supplierId để API tự động lấy từ token
 
             const res = await scheduleApi.getAdminManagerSchedule(month, year, supplierIdForApi);
+            console.log("🔍 [DEBUG] Schedule Data:", res.data);
             const payload = Array.isArray(res.data) ? res.data : res.data?.data;
             setScheduleData(payload ?? []);
         } catch (error: any) {
@@ -828,58 +829,6 @@ const ScheduleManagement = () => {
     };
 
     // Xóa ca đăng ký cho một nhân viên cụ thể từ modal danh sách nhân viên
-    // const handleDeleteScheduleForEmployee = async (employeeName: string) => {
-    //     if (!employeeListModal.show || !employeeListModal.day || !employeeListModal.detailShiftTypeId) return;
-
-    //     const ok = window.confirm(
-    //         `Bạn có chắc muốn xóa ca "${employeeListModal.detailShiftTypeName}" cho nhân viên "${employeeName}" ngày ${employeeListModal.day}?`
-    //     );
-    //     if (!ok) return;
-
-    //     try {
-    //         // Tìm schedule phù hợp theo ngày, detailShiftTypeId và tên nhân viên
-    //         const target = scheduleData.find((s: any) => {
-    //             const regDate = s?.registrationDate;
-    //             const d = toRegistrationDateOnly(regDate);
-    //             if (!d) return false;
-    //             const isSameDay =
-    //                 d.getFullYear() === currentYear &&
-    //                 d.getMonth() === currentMonth &&
-    //                 d.getDate() === employeeListModal.day;
-
-    //             const detailShiftTypeId = s?.detailShiftType?.id;
-    //             const empName = s?.employee?.name;
-
-    //             return (
-    //                 isSameDay &&
-    //                 detailShiftTypeId === employeeListModal.detailShiftTypeId &&
-    //                 empName === employeeName
-    //             );
-    //         });
-
-    //         if (!target?.id) {
-    //             window.alert("Không tìm thấy bản ghi ca làm để xóa cho nhân viên này.");
-    //             return;
-    //         }
-    //         console.log("🔍 [DEBUG] Target schedule ID:", target.id);
-    //         await scheduleApi.delete(target.id);
-
-    //         // Reload lại dữ liệu sau khi xóa
-    //         await loadScheduleData();
-
-    //         // Cập nhật lại danh sách nhân viên trong modal (loại bỏ nhân viên vừa xóa)
-    //         setEmployeeListModal((prev) => ({
-    //             ...prev,
-    //             employees: prev.employees.filter((e) => e.name !== employeeName),
-    //         }));
-    //     } catch (error: any) {
-    //         console.error("Lỗi khi xóa ca từ màn quản lý:", error?.response?.data || error?.message);
-    //         window.alert("Đã xảy ra lỗi khi xóa ca. Vui lòng thử lại.");
-    //     }
-
-    // };
-    // Xóa ca đăng ký cho một nhân viên cụ thể từ modal danh sách nhân viên
-    // Xóa ca đăng ký cho một nhân viên cụ thể từ modal danh sách nhân viên
     const handleDeleteScheduleForEmployee = async (employeeName: string) => {
         // console.log("🔍 [DEBUG] Employee Name:", employeeName);
         // console.log("🔍 [DEBUG] Employee List Modal:", employeeListModal);
@@ -894,6 +843,7 @@ const ScheduleManagement = () => {
         const toastId = "delete-schedule-success";
         try {
             // Tìm schedule phù hợp
+
             const target = scheduleData.find((s: any) => {
                 const regDate = s?.registrationDate;
                 const d = toRegistrationDateOnly(regDate);
@@ -929,39 +879,7 @@ const ScheduleManagement = () => {
             const deletedEmployee = employeeListModal.employees.find(
                 emp => emp.name === employeeName
             );
-            console.log("🔍 [DEBUG] Deleted employee:", deletedEmployee);
-            // Cập nhật modal - loại bỏ nhân viên vừa xóa
-            setEmployeeListModal((prev) => ({
-                ...prev,
-                employees: prev.employees.filter((e) => e.name !== employeeName),
-            }));
 
-            // Thêm nhân viên vừa xóa vào danh sách khả dụng
-            if (deletedEmployee) {
-
-                // Tạo đối tượng nhân viên mới cho danh sách khả dụng
-                const newAvailableEmployee = {
-                    id: deletedEmployee.employeeId,  // Fallback ID nếu không có
-                    name: deletedEmployee.name,
-                };
-
-                // Cập nhật availableEmployees
-                setAvailableEmployees((prev: any) => {
-                    // tránh trùng nhân viên
-                    const exists = prev.some((e: any) => e.id === deletedEmployee.employeeId);
-                    const updated = exists ? prev : [...prev, newAvailableEmployee];
-
-                    // luôn sync newEmployeeId theo danh sách mới
-                    if (updated.length > 0) {
-                        setNewEmployeeId(updated[0].id);
-                    } else {
-                        setNewEmployeeId(null);
-                    }
-
-                    return updated;
-                });
-
-            }
 
             await loadScheduleData();
             await handleShiftClick(
@@ -971,39 +889,13 @@ const ScheduleManagement = () => {
                 employeeListModal.endAt,
                 employeeListModal.detailShiftTypeId!
             );
-
-            if (deletedEmployee?.employeeId != null) {
-                setAvailableEmployees((prev: any) => {
-                    const exists = prev.some((e: any) => e.id === deletedEmployee.employeeId);
-                    return exists
-                        ? prev
-                        : [...prev, { id: deletedEmployee.employeeId, name: deletedEmployee.name }];
-                });
-
-                setNewEmployeeId(deletedEmployee.employeeId);
-            }
+            console.log("🔍 [DEBUG] 1:", availableEmployees);
+            setAvailableEmployees([...availableEmployees, { id: deletedEmployee?.employeeId || 0, name: deletedEmployee?.name || "" } as { id: number; name: string }]);
+            console.log("🔍 [DEBUG] 2:", availableEmployees);
             setEmployeeListModal((prev) => ({
                 ...prev,
-                show: false,
+                employees: prev.employees.filter(emp => emp.name !== deletedEmployee?.name),
             }));
-
-            setTimeout(() => {
-                setEmployeeListModal((prev) => ({
-                    ...prev,
-                    show: true,
-                    employees: prev.employees.filter((e) => e.name !== employeeName),
-                }));
-
-                // 🔥 UPDATE TOAST sau khi modal remount
-                toast.update(toastId, {
-                    render: "Xóa ca thành công. Nhân viên đã được thêm vào danh sách khả dụng.",
-                    type: "success",
-                    isLoading: false,
-                    autoClose: 3000,
-                });
-            }, 0);
-
-
         } catch (error: any) {
             console.error("Lỗi khi xóa ca:", error?.response?.data || error?.message);
             window.alert("Đã xảy ra lỗi khi xóa ca. Vui lòng thử lại.");

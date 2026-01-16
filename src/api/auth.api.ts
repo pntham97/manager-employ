@@ -36,6 +36,8 @@ export const authApi = {
         );
     },
     refreshToken() {
+        console.log("🔍 [DEBUG] Refreshing token");
+        console.log("🔍 [DEBUG] Refresh token:", tokenService.getRefreshToken());
         return axiosClient.post(
             "/auth/refresh",
             {
