@@ -14,6 +14,8 @@ import ScheduleManagement from "../pages/ScheduleManagement";
 import CreateShiftTypeSupplier from "../pages/CreateShiftTypeSupplier";
 import AddEmploys from "../pages/AddEmploys";
 import PrivateRoute from "../pages/PrivateRoute";
+import ChangePasswordPage from "../pages/ChangePassword";
+import ProfilePage from "../pages/ManagerInformation";
 
 const AppRoutes = () => {
     return (
@@ -37,6 +39,8 @@ const AppRoutes = () => {
                         <Route path="/manager-employ" element={<ManagerEmploy />} />
                         <Route path="/manager-employ/add-employs" element={<AddEmploys />} />
                         <Route path="/employ-detail" element={<EmployDetail />} />
+                        <Route path="/manager-infomation" element={<ProfilePage />} />
+                        <Route path="/change-password" element={<ChangePasswordPage />} />
                     </Route>
                 </Route>
             </Routes>

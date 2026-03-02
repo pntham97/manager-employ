@@ -36,13 +36,26 @@ axiosClient.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
+    const status = error.response?.status;
+    const currentPath = window.location.pathname;
 
+    const isLoginPage = currentPath === "/login";
+    const isLoginRequest = originalRequest?.url?.includes("/login");
+    const refreshToken = localStorage.getItem("refreshToken");
+
+    // ❗ Chỉ xử lý 401 nếu:
+    // - Không phải login page
+    // - Không phải request login
+    // - Có refreshToken
     if (
-      error.response?.status === 401 &&
-      !originalRequest._retry
+      status === 401 &&
+      !originalRequest._retry &&
+      !isLoginPage &&
+      !isLoginRequest &&
+      refreshToken
     ) {
       if (isRefreshing) {
-        return new Promise(function (resolve, reject) {
+        return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });
         }).then((token) => {
           originalRequest.headers.Authorization = `Bearer ${token}`;
@@ -54,12 +67,11 @@ axiosClient.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        console.log("🔍 [DEBUG] Refreshing token");
         const res = await authApi.refreshToken();
-        console.log("🔍 [DEBUG] Refresh token response:", res.data);
         const newAccessToken = res.data.accessToken;
-        const NewrefreshToken = res.data.refreshToken;
-        tokenService.setTokens(newAccessToken, NewrefreshToken);
+        const newRefreshToken = res.data.refreshToken;
+
+        tokenService.setTokens(newAccessToken, newRefreshToken);
 
         axiosClient.defaults.headers.Authorization =
           `Bearer ${newAccessToken}`;
@@ -71,8 +83,10 @@ axiosClient.interceptors.response.use(
         processQueue(err, null);
         tokenService.clearTokens();
 
-        // 👉 redirect login nếu cần
-        window.location.href = "/login";
+        // ❗ Chỉ redirect nếu không ở login page
+        if (!isLoginPage) {
+          window.location.href = "/login";
+        }
 
         return Promise.reject(err);
       } finally {
@@ -128,9 +142,11 @@ axiosClient.interceptors.response.use(
       localStorage.removeItem("employee");
 
       // ❗ TRÁNH LOOP
-      if (!window.location.pathname.includes("/login")) {
-        window.location.href = "/login";
-      }
+      // if (!window.location.pathname.includes("/login")) {
+      //   window.location.href = "/login";
+      // }
+    } else {
+      return false
     }
 
     return Promise.reject(error);
