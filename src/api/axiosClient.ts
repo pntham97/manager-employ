@@ -2,6 +2,15 @@ import axios from "axios";
 import { tokenService } from "../utils/token";
 import { authApi } from "./auth.api";
 
+
+export const axiosRefresh = axios.create({
+  baseURL: import.meta.env.VITE_API_BASE_URL,
+  timeout: 10000,
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
+
 const axiosClient = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL,
   timeout: 10000,
@@ -15,15 +24,15 @@ let failedQueue: any[] = [];
 
 const processQueue = (error: any, token: string | null = null) => {
   failedQueue.forEach((prom) => {
-    if (error) {
-      prom.reject(error);
-    } else {
-      prom.resolve(token);
-    }
+    if (error) prom.reject(error);
+    else prom.resolve(token);
   });
   failedQueue = [];
 };
 
+//
+// ✅ REQUEST INTERCEPTOR (CHỈ 1 CÁI)
+//
 axiosClient.interceptors.request.use((config) => {
   const token = tokenService.getAccessToken();
   if (token && config.headers) {
@@ -32,21 +41,20 @@ axiosClient.interceptors.request.use((config) => {
   return config;
 });
 
+//
+// ✅ RESPONSE INTERCEPTOR (CHỈ 1 CÁI)
+//
 axiosClient.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
     const status = error.response?.status;
+    const refreshToken = tokenService.getRefreshToken();
     const currentPath = window.location.pathname;
 
     const isLoginPage = currentPath === "/login";
     const isLoginRequest = originalRequest?.url?.includes("/login");
-    const refreshToken = localStorage.getItem("refreshToken");
 
-    // ❗ Chỉ xử lý 401 nếu:
-    // - Không phải login page
-    // - Không phải request login
-    // - Có refreshToken
     if (
       status === 401 &&
       !originalRequest._retry &&
@@ -73,17 +81,16 @@ axiosClient.interceptors.response.use(
 
         tokenService.setTokens(newAccessToken, newRefreshToken);
 
-        axiosClient.defaults.headers.Authorization =
-          `Bearer ${newAccessToken}`;
-
         processQueue(null, newAccessToken);
+
+        originalRequest.headers.Authorization =
+          `Bearer ${newAccessToken}`;
 
         return axiosClient(originalRequest);
       } catch (err) {
         processQueue(err, null);
         tokenService.clearTokens();
 
-        // ❗ Chỉ redirect nếu không ở login page
         if (!isLoginPage) {
           window.location.href = "/login";
         }
@@ -96,72 +103,6 @@ axiosClient.interceptors.response.use(
 
     return Promise.reject(error);
   }
-);
-// Request interceptor (gắn token)
-axiosClient.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem("token");
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
-
-axiosClient.interceptors.request.use((config) => {
-  const token = localStorage.getItem("token");
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
-// // Response interceptor (handle error chung)
-// axiosClient.interceptors.response.use(
-//   (response) => response.data,
-//   (error) => {
-//     if (error.response?.status === 401) {
-//       // logout / redirect login
-//       localStorage.removeItem("access_token");
-//       window.location.href = "/login";
-//     }
-
-
-//     return Promise.reject(error);
-//   }
-// );
-axiosClient.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    const status = error?.response?.status;
-
-    if (status === 401 || status === 403) {
-      // ❗ XÓA TOÀN BỘ AUTH
-      localStorage.removeItem("accessToken");
-      localStorage.removeItem("refreshToken");
-      localStorage.removeItem("employee");
-
-      // ❗ TRÁNH LOOP
-      // if (!window.location.pathname.includes("/login")) {
-      //   window.location.href = "/login";
-      // }
-    } else {
-      return false
-    }
-
-    return Promise.reject(error);
-  }
-);
-axiosClient.interceptors.response.use(
-  // (res) => res,
-  // (error) => {
-  //   if (error.response?.status === 401) {
-  //     localStorage.removeItem("token");
-  //     localStorage.removeItem("user");
-  //     window.location.href = "/login";
-  //   }
-  //   return Promise.reject(error);
-  // }
 );
 
 export default axiosClient;

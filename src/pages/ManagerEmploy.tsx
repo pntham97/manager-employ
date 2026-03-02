@@ -777,7 +777,7 @@ const ManagerEmploy = () => {
                                                             </button>
                                                         )}
                                                         <button
-                                                            onClick={() => navigate("/EmployDetail", { state: { employee } })}
+                                                            onClick={() => navigate("/employ-detail", { state: { employee } })}
                                                             className="text-text-secondary-light dark:text-text-secondary-dark hover:text-[white] transition-colors p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
                                                         >
                                                             <span className="material-icons-outlined">more_vert</span>
