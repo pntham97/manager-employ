@@ -28,15 +28,15 @@ const AppRoutes = () => {
                 <Route element={<PrivateRoute />}>
                     <Route element={<MainLayout />}>
                         <Route path="/" element={<Dashboard />} />
-                        <Route path="/Wage" element={<Wage />} />
-                        <Route path="/Projects" element={<Projects />} />.
-                        <Route path="/Calendar" element={<Calendar />} />
-                        <Route path="/ScheduleApproval" element={<ScheduleApproval />} />
-                        <Route path="/ScheduleManagement" element={<ScheduleManagement />} />
-                        <Route path="/ScheduleManagement/CreateShiftTypeSupplier" element={<CreateShiftTypeSupplier />} />
-                        <Route path="/ManagerEmploy" element={<ManagerEmploy />} />
-                        <Route path="/ManagerEmploy/AddEmploys" element={<AddEmploys />} />
-                        <Route path="/EmployDetail" element={<EmployDetail />} />
+                        <Route path="/wage" element={<Wage />} />
+                        <Route path="/projects" element={<Projects />} />.
+                        <Route path="/calendar" element={<Calendar />} />
+                        <Route path="/schedule-approval" element={<ScheduleApproval />} />
+                        <Route path="/schedule-management" element={<ScheduleManagement />} />
+                        <Route path="/schedule-management/create-shift-type-supplier" element={<CreateShiftTypeSupplier />} />
+                        <Route path="/manager-employ" element={<ManagerEmploy />} />
+                        <Route path="/manager-employ/add-employs" element={<AddEmploys />} />
+                        <Route path="/employ-detail" element={<EmployDetail />} />
                     </Route>
                 </Route>
             </Routes>

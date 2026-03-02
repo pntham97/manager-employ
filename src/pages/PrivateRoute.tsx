@@ -1,9 +1,8 @@
 import { Navigate, Outlet } from "react-router-dom";
 
 const PrivateRoute = () => {
-    const token = localStorage.getItem("token");
+    const token = localStorage.getItem("accessToken");
     // hoặc check cookie / context / redux
-
     if (!token) {
         return <Navigate to="/login" replace />;
     }

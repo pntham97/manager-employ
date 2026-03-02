@@ -173,36 +173,36 @@ const SidebarLeft: React.FC = () => {
                 </NavLink>
 
                 {/* HÀNG HÓA */}
-                <NavLink to="/Wage" className={navItemClass}>
+                <NavLink to="/wage" className={navItemClass}>
                     <Archive className="w-5 h-5" />
                     {!collapsed && <span>Bảng lương</span>}
                 </NavLink>
-                <NavLink to="/Projects" className={navItemClass}>
+                <NavLink to="/projects" className={navItemClass}>
                     <span className="material-symbols-outlined fill text-primary">work</span>
                     {!collapsed && <span>Dự án</span>}
                 </NavLink>
 
                 {/* HÓA ĐƠN */}
                 {!isAdmin && (
-                    <NavLink to="/Calendar" className={navItemClass}>
+                    <NavLink to="/calendar" className={navItemClass}>
                         <ScrollTextIcon className="w-5 h-5" />
                         {!collapsed && <span>Lịch làm việc</span>}
                     </NavLink>
                 )}
                 {hasPermission && (
-                    <NavLink to="/ScheduleManagement" className={navItemClass}>
+                    <NavLink to="/schedule-management" className={navItemClass}>
                         <Calendar className="w-5 h-5" />
                         {!collapsed && <span>Quản lý ca đăng ký lịch làm việc</span>}
                     </NavLink>
                 )}
                 {hasPermission && (
-                    <NavLink to="/ScheduleManagement/CreateShiftTypeSupplier" className={navItemClass}>
+                    <NavLink to="/schedule-management/create-shift-type-supplier" className={navItemClass}>
                         <span className="material-symbols-outlined text-[20px]">add_circle</span>
                         {!collapsed && <span>Tạo thời gian đăng ký loại ca</span>}
                     </NavLink>
                 )}
                 {hasPermission && (
-                    <NavLink to="/ScheduleApproval" className={navItemClass}>
+                    <NavLink to="/schedule-approval" className={navItemClass}>
                         <div className="relative">
                             <CheckCircle className="w-5 h-5" />
                             {pendingApprovalCount > 0 && (
@@ -223,7 +223,7 @@ const SidebarLeft: React.FC = () => {
                         )}
                     </NavLink>
                 )}
-                <NavLink to="/ManagerEmploy" className={navItemClass}>
+                <NavLink to="/manager-employ" className={navItemClass}>
                     <ScrollTextIcon className="w-5 h-5" />
                     {!collapsed && <span>Hồ sơ nhân viên</span>}
                 </NavLink>
@@ -299,7 +299,7 @@ const SidebarLeft: React.FC = () => {
                 <div className="border-t border-gray-300 my-2" />
 
                 {/* SETTINGS */}
-                <NavLink to="/Settings" className={navItemClass}>
+                <NavLink to="/settings" className={navItemClass}>
                     <Settings className="w-5 h-5" />
                     {!collapsed && <span>Cài đặt</span>}
                 </NavLink>
