@@ -1,4 +1,5 @@
 import axiosClient from "./axiosClient";
+import { axiosRefresh } from "./axiosClient";
 import type { ApiResponse } from "../types/api.type";
 import { tokenService } from "../utils/token";
 
@@ -36,14 +37,9 @@ export const authApi = {
         );
     },
     refreshToken() {
-        console.log("🔍 [DEBUG] Refreshing token");
-        console.log("🔍 [DEBUG] Refresh token:", tokenService.getRefreshToken());
-        return axiosClient.post(
-            "/auth/refresh",
-            {
-                refreshToken: tokenService.getRefreshToken(),
-            }
-        );
+        return axiosRefresh.post("/auth/refresh", {
+            refreshToken: tokenService.getRefreshToken(),
+        });
     },
 
     // Force logout một user theo userId (ADMIN: mọi user, MANAGER: chỉ nhân viên cùng supplier)

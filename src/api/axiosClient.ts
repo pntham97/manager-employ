@@ -2,6 +2,15 @@ import axios from "axios";
 import { tokenService } from "../utils/token";
 import { authApi } from "./auth.api";
 
+
+export const axiosRefresh = axios.create({
+  baseURL: import.meta.env.VITE_API_BASE_URL,
+  timeout: 10000,
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
+
 const axiosClient = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL,
   timeout: 10000,
@@ -15,15 +24,15 @@ let failedQueue: any[] = [];
 
 const processQueue = (error: any, token: string | null = null) => {
   failedQueue.forEach((prom) => {
-    if (error) {
-      prom.reject(error);
-    } else {
-      prom.resolve(token);
-    }
+    if (error) prom.reject(error);
+    else prom.resolve(token);
   });
   failedQueue = [];
 };
 
+//
+// ✅ REQUEST INTERCEPTOR (CHỈ 1 CÁI)
+//
 axiosClient.interceptors.request.use((config) => {
   const token = tokenService.getAccessToken();
   if (token && config.headers) {
@@ -32,20 +41,29 @@ axiosClient.interceptors.request.use((config) => {
   return config;
 });
 
+//
+// ✅ RESPONSE INTERCEPTOR (CHỈ 1 CÁI)
+//
 axiosClient.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
-    const isLoginPage = window.location.pathname.includes("/login");
-    if (isLoginPage) {
-      return Promise.reject(error);
-    }
+    const status = error.response?.status;
+    const refreshToken = tokenService.getRefreshToken();
+    const currentPath = window.location.pathname;
+
+    const isLoginPage = currentPath === "/login";
+    const isLoginRequest = originalRequest?.url?.includes("/login");
+
     if (
-      error.response?.status === 401 &&
-      !originalRequest._retry
+      status === 401 &&
+      !originalRequest._retry &&
+      !isLoginPage &&
+      !isLoginRequest &&
+      refreshToken
     ) {
       if (isRefreshing) {
-        return new Promise(function (resolve, reject) {
+        return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });
         }).then((token) => {
           originalRequest.headers.Authorization = `Bearer ${token}`;
@@ -57,25 +75,25 @@ axiosClient.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        console.log("🔍 [DEBUG] Refreshing token");
         const res = await authApi.refreshToken();
-        console.log("🔍 [DEBUG] Refresh token response:", res.data);
         const newAccessToken = res.data.accessToken;
-        const NewrefreshToken = res.data.refreshToken;
-        tokenService.setTokens(newAccessToken, NewrefreshToken);
+        const newRefreshToken = res.data.refreshToken;
 
-        axiosClient.defaults.headers.Authorization =
-          `Bearer ${newAccessToken}`;
+        tokenService.setTokens(newAccessToken, newRefreshToken);
 
         processQueue(null, newAccessToken);
+
+        originalRequest.headers.Authorization =
+          `Bearer ${newAccessToken}`;
 
         return axiosClient(originalRequest);
       } catch (err) {
         processQueue(err, null);
         tokenService.clearTokens();
 
-        // 👉 redirect login nếu cần
-        window.location.href = "/login";
+        if (!isLoginPage) {
+          window.location.href = "/login";
+        }
 
         return Promise.reject(err);
       } finally {
@@ -85,17 +103,6 @@ axiosClient.interceptors.response.use(
 
     return Promise.reject(error);
   }
-);
-// Request interceptor (gắn token)
-axiosClient.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem("token");
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => Promise.reject(error)
 );
 
 axiosClient.interceptors.request.use((config) => {

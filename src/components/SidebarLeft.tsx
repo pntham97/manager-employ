@@ -296,12 +296,16 @@ const SidebarLeft: React.FC = () => {
                     </div>
                 )} */}
 
-                <div className="border-t border-gray-300 my-2" />
+                {/* <div className="border-t border-gray-300 my-2" /> */}
 
                 {/* SETTINGS */}
-                <NavLink to="/settings" className={navItemClass}>
-                    <Settings className="w-5 h-5" />
-                    {!collapsed && <span>Cài đặt</span>}
+                <NavLink to="/manager-infomation" className={navItemClass}>
+                    <User className="w-5 h-5" />
+                    {!collapsed && <span>Quản lý thông tin</span>}
+                </NavLink>
+                <NavLink to="/change-password" className={navItemClass}>
+                    <Key className="w-5 h-5" />
+                    {!collapsed && <span>Đổi mật khẩu</span>}
                 </NavLink>
             </nav>
             <div className="flex items-cente border-t border-gray-200 px-3 py-3">
@@ -318,25 +322,33 @@ const SidebarLeft: React.FC = () => {
                 <div className="flex items-center gap-4 relative">
                     {/* Dropdown user */}
                     <div className="relative">
-                        <button
-                            onClick={() => setMenuOpen(!menuOpen)}
-                            className="flex items-center gap-2 bg-white/20 text-black px-4 py-2 rounded-full hover:bg-white/30 transition"
-                        >
-                            <img
-                                src="https://i.pravatar.cc/40"
-                                alt="avatar"
-                                className="w-8 h-8 rounded-full border-2 border-white"
-                            />
-                            <div className="flex items-start flex-col leading-tight">
-                                <span className="font-semibold text-gray-800">
-                                    Nguyễn Văn A
-                                </span>
-                                <span className="text-sm text-gray-500">
-                                    Quản lý kho
-                                </span>
-                            </div>
-                        </button>
-
+                        <div className="flex items-center  ">
+                            <button
+                                onClick={() => setMenuOpen(!menuOpen)}
+                                className="flex items-center gap-2 bg-white/20 text-black px-4 py-2 rounded-full hover:bg-white/30 transition"
+                            >
+                                <img
+                                    src="https://i.pravatar.cc/40"
+                                    alt="avatar"
+                                    className="w-8 h-8 rounded-full border-2 border-white"
+                                />
+                                <div className="flex items-start flex-col leading-tight">
+                                    <span className="font-semibold text-gray-800">
+                                        Nguyễn Văn A
+                                    </span>
+                                    <span className="text-sm text-gray-500">
+                                        Quản lý kho
+                                    </span>
+                                </div>
+                            </button>
+                            <button
+                                onClick={handleLogout}
+                                className=" text-red-600"
+                            >
+                                <LogOut className="w-4 h-4" />
+                            </button>
+                        </div>
+                        {/* 
                         {menuOpen && (
                             <div className="absolute bottom-full -right-[30px] mb-2 w-52 bg-white rounded-xl shadow-lg py-2 z-50">
                                 <button
@@ -364,7 +376,7 @@ const SidebarLeft: React.FC = () => {
                                     <LogOut className="w-4 h-4" /> Logout
                                 </button>
                             </div>
-                        )}
+                        )} */}
                     </div>
                 </div>
             </div>
@@ -432,7 +444,7 @@ const SidebarLeft: React.FC = () => {
                 </div>
             )}
             {/* Modal Đổi mật khẩu */}
-            {showPasswordModal && (
+            {/* {showPasswordModal && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                     <div className="bg-white rounded-2xl shadow-lg w-full max-w-md p-6 relative">
                         <button
@@ -494,7 +506,7 @@ const SidebarLeft: React.FC = () => {
                         </form>
                     </div>
                 </div>
-            )}
+            )} */}
         </aside>
     );
 };
