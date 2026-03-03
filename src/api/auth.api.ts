@@ -49,6 +49,6 @@ export const authApi = {
 
     // Đổi mật khẩu nhân viên
     changePassword(userId: string, newPassword: string): Promise<ApiResponse<any>> {
-        return axiosClient.post(`/auth/change-password`, { userId, newPassword });
+        return axiosClient.put(`/auth/users/password`, { userId, newPassword });
     },
 };
