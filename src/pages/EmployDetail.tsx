@@ -1467,7 +1467,7 @@ const EmployDetail = () => {
             <nav className="flex items-center text-sm text-gray-500 dark:text-gray-400">
                 <Link to="/" className="hover:text-primary transition-colors">Trang chủ</Link>
                 <span className="mx-2 text-gray-400">/</span>
-                <Link to="/ManagerEmploy" className="hover:text-primary transition-colors">Danh sách nhân viên</Link>
+                <Link to="/manager-employ" className="hover:text-primary transition-colors">Danh sách nhân viên</Link>
                 <span className="mx-2 text-gray-400">/</span>
                 <span className="font-medium text-gray-900 dark:text-white">{employee?.name}</span>
             </nav>

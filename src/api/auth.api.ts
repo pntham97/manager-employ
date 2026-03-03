@@ -46,4 +46,9 @@ export const authApi = {
     forceLogout(userId: string): Promise<ApiResponse<any>> {
         return axiosClient.post(`/auth/force-logout/${userId}`);
     },
+
+    // Đổi mật khẩu nhân viên
+    changePassword(userId: string, newPassword: string): Promise<ApiResponse<any>> {
+        return axiosClient.post(`/auth/change-password`, { userId, newPassword });
+    },
 };

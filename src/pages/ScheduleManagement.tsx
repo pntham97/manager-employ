@@ -1470,7 +1470,7 @@ const ScheduleManagement = () => {
                                                         return (
                                                             <button
                                                                 type="button"
-                                                                onClick={() => navigate(`/ScheduleManagement/CreateShiftTypeSupplier?startDate=${startDatePrefill}`)}
+                                                                onClick={() => navigate(`/schedule-management/create-shift-type-supplier?startDate=${startDatePrefill}`)}
                                                                 className="mt-2 max-w-full inline-flex items-center justify-center gap-1 rounded-md
                border border-amber-300 dark:border-amber-600
                bg-gradient-to-r from-amber-50 to-yellow-50
@@ -1644,7 +1644,7 @@ const ScheduleManagement = () => {
                                                         return (
                                                             <button
                                                                 type="button"
-                                                                onClick={() => navigate(`/ScheduleManagement/CreateShiftTypeSupplier?startDate=${startDatePrefill}`)}
+                                                                onClick={() => navigate(`/schedule-management/create-shift-type-supplier?startDate=${startDatePrefill}`)}
                                                                 className="mt-2 max-w-full inline-flex items-center justify-center gap-1 rounded-md border border-blue-300 dark:border-blue-600 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/40 dark:to-indigo-900/30 px-2 py-1 text-[10px] font-medium text-blue-700 dark:text-blue-200 shadow-sm hover:shadow-md hover:from-blue-100 hover:to-indigo-100 dark:hover:from-blue-800/50 dark:hover:to-indigo-800/40 hover:border-blue-400 dark:hover:border-blue-500 transition-all duration-200 active:scale-95 overflow-hidden"
                                                             >
                                                                 <span className="material-symbols-outlined text-[13px] flex-shrink-0">

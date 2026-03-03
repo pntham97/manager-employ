@@ -87,7 +87,7 @@ const AddEmploys = () => {
         'Australia',
         'Canada',
     ];
-    
+
     const filteredCountries = COUNTRIES.filter((country) =>
         country.toLowerCase().includes(form.nationality.toLowerCase())
     );
@@ -322,7 +322,7 @@ const AddEmploys = () => {
             const res = await employsApi.postEmploys(payload);
             console.log("Tạo nhân viên thành công:", res.data);
             alert("Tạo nhân viên thành công!");
-            navigate("/ManagerEmploy");
+            navigate("/manager-employ");
         } catch (error: any) {
             console.error("Lỗi tạo nhân viên:", error);
             alert(error.response?.data?.message || "Có lỗi xảy ra khi tạo nhân viên");
@@ -340,7 +340,7 @@ const AddEmploys = () => {
                     Trang chủ
                 </Link>
                 <span className="material-symbols-outlined text-slate-400 text-[16px]">chevron_right</span>
-                <Link to="/ManagerEmploy" className="text-slate-500 dark:text-slate-400 hover:text-primary transition-colors font-medium leading-normal">Danh sách nhân viên</Link>
+                <Link to="/manager-employ" className="text-slate-500 dark:text-slate-400 hover:text-primary transition-colors font-medium leading-normal">Danh sách nhân viên</Link>
                 <span className="material-symbols-outlined text-slate-400 text-[16px]">chevron_right</span>
                 <span className="text-slate-900 dark:text-slate-100 font-medium leading-normal">Thêm mới nhân viên</span>
             </div>

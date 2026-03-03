@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { employeeApi, type EmployeeResponse, type PageResponse, type Company } from "../api/employee.api";
 import { authApi } from "../api/auth.api";
-import { message } from "antd";
+import { message, Modal, Input } from "antd";
 import { exportEmployeesToExcel } from "../utils/exportEmploys";
 
 interface Supplier {
@@ -39,6 +39,13 @@ const ManagerEmploy = () => {
     const lastQueryKeyRef = useRef<string>("");
     const abortRef = useRef<AbortController | null>(null);
     const inactivityTimeoutRef = useRef<number | null>(null);
+
+    // Change Password Modal States
+    const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+    const [selectedEmployeeForPassword, setSelectedEmployeeForPassword] = useState<EmployeeResponse | null>(null);
+    const [newPassword, setNewPassword] = useState("");
+    const [confirmPassword, setConfirmPassword] = useState("");
+    const [isChangingPassword, setIsChangingPassword] = useState(false);
 
     // Format ngày tháng
     const formatDate = (dateString: string) => {
@@ -356,6 +363,41 @@ const ManagerEmploy = () => {
         }
     };
 
+    // Mở modal đổi mật khẩu
+    const handleOpenPasswordModal = (employee: EmployeeResponse) => {
+        setSelectedEmployeeForPassword(employee);
+        setNewPassword("");
+        setConfirmPassword("");
+        setIsPasswordModalOpen(true);
+    };
+
+    // Xử lý đổi mật khẩu
+    const handleChangePassword = async () => {
+        if (!selectedEmployeeForPassword?.userId) {
+            message.error("Không tìm thấy thông tin User ID của nhân viên.");
+            return;
+        }
+        if (!newPassword || newPassword.length < 6) {
+            message.warning("Mật khẩu mới phải có ít nhất 6 ký tự.");
+            return;
+        }
+        if (newPassword !== confirmPassword) {
+            message.warning("Mật khẩu xác nhận không khớp.");
+            return;
+        }
+
+        try {
+            setIsChangingPassword(true);
+            await authApi.changePassword(selectedEmployeeForPassword.userId, newPassword);
+            message.success(`Đã đổi mật khẩu cho nhân viên ${selectedEmployeeForPassword.name} thành công.`);
+            setIsPasswordModalOpen(false);
+        } catch (error: any) {
+            message.error(error?.response?.data?.message || "Lỗi khi đổi mật khẩu, vui lòng thử lại.");
+        } finally {
+            setIsChangingPassword(false);
+        }
+    };
+
     // Xử lý chuyển trang
     const handlePageChange = (newPage: number) => {
         if (newPage >= 0 && newPage < pagination.totalPages) {
@@ -511,7 +553,7 @@ const ManagerEmploy = () => {
                         Xuất Excel
                     </button>
                     <button
-                        onClick={() => navigate("/ManagerEmploy/AddEmploys")}
+                        onClick={() => navigate("/manager-employ/add-employs")}
                         className="inline-flex items-center px-4 py-2 bg-[white] hover:bg-[white]-hover text-black rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[white] shadow-soft transition-colors"
                     >
                         <span className="material-icons-outlined text-lg mr-2">add</span>
@@ -777,7 +819,20 @@ const ManagerEmploy = () => {
                                                             </button>
                                                         )}
                                                         <button
-                                                            onClick={() => navigate("/employ-detail", { state: { employee } })}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleOpenPasswordModal(employee);
+                                                            }}
+                                                            className="inline-flex items-center px-3 py-1.5 rounded-md text-[11px] font-medium border transition-colors bg-white dark:bg-gray-900 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                                                        >
+                                                            <span className="material-icons-outlined text-sm mr-1">key</span>
+                                                            Đổi MK
+                                                        </button>
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                navigate("/employ-detail", { state: { employee } });
+                                                            }}
                                                             className="text-text-secondary-light dark:text-text-secondary-dark hover:text-[white] transition-colors p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
                                                         >
                                                             <span className="material-icons-outlined">more_vert</span>
@@ -794,6 +849,42 @@ const ManagerEmploy = () => {
                     </>
                 )}
             </div>
+
+            {/* Modal Đổi mật khẩu */}
+            <Modal
+                title={`Đổi mật khẩu: ${selectedEmployeeForPassword?.name || ""}`}
+                open={isPasswordModalOpen}
+                onCancel={() => setIsPasswordModalOpen(false)}
+                onOk={handleChangePassword}
+                confirmLoading={isChangingPassword}
+                okText="Lưu mật khẩu"
+                cancelText="Hủy"
+                okButtonProps={{ className: "bg-blue-600 hover:bg-blue-700" }}
+            >
+                <div className="space-y-4 py-4">
+                    <div>
+                        <label className="block text-sm font-medium mb-1">Mật khẩu mới</label>
+                        <Input.Password
+                            placeholder="Nhập mật khẩu mới"
+                            value={newPassword}
+                            onChange={(e) => setNewPassword(e.target.value)}
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium mb-1">Xác nhận mật khẩu mới</label>
+                        <Input.Password
+                            placeholder="Xác nhận mật khẩu mới"
+                            value={confirmPassword}
+                            onChange={(e) => setConfirmPassword(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                    handleChangePassword();
+                                }
+                            }}
+                        />
+                    </div>
+                </div>
+            </Modal>
         </div>
     );
 };

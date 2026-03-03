@@ -52,113 +52,73 @@ axiosClient.interceptors.response.use(
     const refreshToken = tokenService.getRefreshToken();
     const currentPath = window.location.pathname;
 
-    const isLoginPage = currentPath === "/login";
+    const isLoginPage = currentPath.includes("/login");
     const isLoginRequest = originalRequest?.url?.includes("/login");
 
-    if (
-      status === 401 &&
-      !originalRequest._retry &&
-      !isLoginPage &&
-      !isLoginRequest &&
-      refreshToken
-    ) {
-      if (isRefreshing) {
-        return new Promise((resolve, reject) => {
-          failedQueue.push({ resolve, reject });
-        }).then((token) => {
-          originalRequest.headers.Authorization = `Bearer ${token}`;
-          return axiosClient(originalRequest);
-        });
+    if (status === 401 && !isLoginPage && !isLoginRequest) {
+      if (!refreshToken) {
+        // Không có refresh token -> Đăng xuất ngay
+        tokenService.clearTokens();
+        localStorage.removeItem("employee");
+        localStorage.removeItem("user");
+        window.location.href = "/login";
+        return Promise.reject(error);
       }
 
-      originalRequest._retry = true;
-      isRefreshing = true;
-
-      try {
-        const res = await authApi.refreshToken();
-        const newAccessToken = res.data.accessToken;
-        const newRefreshToken = res.data.refreshToken;
-
-        tokenService.setTokens(newAccessToken, newRefreshToken);
-
-        processQueue(null, newAccessToken);
-
-        originalRequest.headers.Authorization =
-          `Bearer ${newAccessToken}`;
-
-        return axiosClient(originalRequest);
-      } catch (err) {
-        processQueue(err, null);
-        tokenService.clearTokens();
-
-        if (!isLoginPage) {
-          window.location.href = "/login";
+      if (!originalRequest._retry) {
+        if (isRefreshing) {
+          // Nếu đang làm mới, các request khác chờ
+          return new Promise((resolve, reject) => {
+            failedQueue.push({ resolve, reject });
+          }).then((token) => {
+            originalRequest.headers.Authorization = `Bearer ${token}`;
+            return axiosClient(originalRequest);
+          });
         }
 
-        return Promise.reject(err);
-      } finally {
-        isRefreshing = false;
+        originalRequest._retry = true;
+        isRefreshing = true;
+
+        try {
+          const res = await authApi.refreshToken();
+          // Cục data trả về có thể bọc trong data thêm một lớp do ApiResponse, hoặc trực tiếp có accessToken
+          const newAccessToken = res.data?.data?.accessToken || res.data?.accessToken;
+          const newRefreshToken = res.data?.data?.refreshToken || res.data?.refreshToken;
+
+          if (!newAccessToken) {
+            throw new Error("Cannot get new access token");
+          }
+
+          tokenService.setTokens(newAccessToken, newRefreshToken);
+
+          processQueue(null, newAccessToken);
+
+          originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+
+          return axiosClient(originalRequest);
+        } catch (err) {
+          processQueue(err, null);
+          tokenService.clearTokens();
+          localStorage.removeItem("employee");
+          localStorage.removeItem("user");
+          window.location.href = "/login";
+          return Promise.reject(err);
+        } finally {
+          isRefreshing = false;
+        }
       }
     }
 
-    return Promise.reject(error);
-  }
-);
-
-axiosClient.interceptors.request.use((config) => {
-  const token = localStorage.getItem("token");
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
-// // Response interceptor (handle error chung)
-// axiosClient.interceptors.response.use(
-//   (response) => response.data,
-//   (error) => {
-//     if (error.response?.status === 401) {
-//       // logout / redirect login
-//       localStorage.removeItem("access_token");
-//       window.location.href = "/login";
-//     }
-
-
-//     return Promise.reject(error);
-//   }
-// );
-axiosClient.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    const status = error?.response?.status;
-    const isLoginPage = window.location.pathname.includes("/login");
-    if (isLoginPage) {
-      return Promise.reject(error);
-    }
-    if (status === 401 || status === 403) {
-      // ❗ XÓA TOÀN BỘ AUTH
-      localStorage.removeItem("accessToken");
-      localStorage.removeItem("refreshToken");
+    if ((status === 401 || status === 403) && !isLoginPage) {
+      // ❗ XÓA TOÀN BỘ AUTH & TRÁNH LOOP
+      tokenService.clearTokens();
       localStorage.removeItem("employee");
-
-      // ❗ TRÁNH LOOP
-      if (!window.location.pathname.includes("/login")) {
-        window.location.href = "/login";
-      }
+      localStorage.removeItem("user");
+      window.location.href = "/login";
     }
 
     return Promise.reject(error);
   }
-);
-axiosClient.interceptors.response.use(
-  // (res) => res,
-  // (error) => {
-  //   if (error.response?.status === 401) {
-  //     localStorage.removeItem("token");
-  //     localStorage.removeItem("user");
-  //     window.location.href = "/login";
-  //   }
-  //   return Promise.reject(error);
-  // }
 );
 
 export default axiosClient;
