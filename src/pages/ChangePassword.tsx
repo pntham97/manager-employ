@@ -1,18 +1,38 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { authApi } from "../api/auth.api";
+import Cookies from "js-cookie";
+import { useEffect } from "react";
 
 const ChangePasswordPage = () => {
     const navigate = useNavigate();
 
+    const [showOtpModal, setShowOtpModal] = useState(false);
+    const [otp, setOtp] = useState("");
     const [oldPassword, setOldPassword] = useState("");
     const [newPassword, setNewPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
-
+    const [showOld, setShowOld] = useState(false);
+    const [showNew, setShowNew] = useState(false);
+    const [showConfirm, setShowConfirm] = useState(false);
     const [errors, setErrors] = useState<{
         old?: string;
         new?: string;
         confirm?: string;
     }>({});
+
+    useEffect(() => {
+        return () => {
+            Cookies.remove("newPassword", { path: "/change-password" });
+        };
+    }, []);
+
+    useEffect(() => {
+        const savedPassword = Cookies.get("newPassword");
+        if (savedPassword) {
+            setShowOtpModal(true);
+        }
+    }, []);
 
     const validate = () => {
         const newErrors: typeof errors = {};
@@ -35,13 +55,45 @@ const ChangePasswordPage = () => {
         if (!validate()) return;
 
         try {
-            // TODO: call API đổi mật khẩu ở đây
-            console.log({ oldPassword, newPassword });
 
-            alert("Đổi mật khẩu thành công 🎉");
-            navigate(-1); // quay lại trang trước
+            // 🔥 Call API gửi OTP
+            await authApi.changePasswordAdmin(oldPassword);
+
+            // 🔥 Lưu newPassword tạm thời (KHÔNG gửi lên server lúc này)
+            sessionStorage.setItem("newPassword", newPassword);
+
+            alert("OTP đã được gửi về email 📩");
+            Cookies.set("newPassword", newPassword || "", {
+                expires: 1,      // 1 ngày
+                secure: true,    // chỉ gửi qua https
+                sameSite: "Strict"
+            });
+            setShowOtpModal(true);
+
+
         } catch (error: any) {
-            alert(error?.response?.data?.message || "Đổi mật khẩu thất bại");
+            alert(error?.response?.data?.message || "Gửi OTP thất bại");
+        }
+    };
+
+    const handleConfirmOtp = async () => {
+        try {
+
+            await authApi.confirmChangePassword(
+                otp,
+                newPassword
+            );
+
+            sessionStorage.removeItem("newPassword");
+            setShowOtpModal(false);
+            setConfirmPassword("");
+            setNewPassword("");
+            setOldPassword("");
+            Cookies.remove("newPassword");
+            alert("Đổi mật khẩu thành công 🎉");
+
+        } catch (error: any) {
+            alert(error?.response?.data?.message || "OTP không hợp lệ");
         }
     };
 
@@ -55,13 +107,25 @@ const ChangePasswordPage = () => {
                 <form className="space-y-4" onSubmit={handleChangePassword}>
                     <div>
                         <label className="block text-sm font-medium">Mật khẩu cũ</label>
-                        <input
-                            type="password"
-                            value={oldPassword}
-                            onChange={(e) => setOldPassword(e.target.value)}
-                            className={`w-full border rounded-lg px-3 py-2 mt-1 focus:ring-2 focus:ring-blue-500 ${errors.old ? "border-red-500" : "border-gray-300"
-                                }`}
-                        />
+
+                        <div className="relative">
+                            <input
+                                type={showOld ? "text" : "password"}
+                                value={oldPassword}
+                                onChange={(e) => setOldPassword(e.target.value)}
+                                className={`w-full border rounded-lg px-3 py-2 mt-1 pr-10 focus:ring-2 focus:ring-blue-500 ${errors.old ? "border-red-500" : "border-gray-300"
+                                    }`}
+                            />
+
+                            <button
+                                type="button"
+                                onClick={() => setShowOld(!showOld)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                            >
+                                {showOld ? "🙈" : "👁"}
+                            </button>
+                        </div>
+
                         {errors.old && (
                             <p className="text-red-500 text-sm mt-1">{errors.old}</p>
                         )}
@@ -69,13 +133,25 @@ const ChangePasswordPage = () => {
 
                     <div>
                         <label className="block text-sm font-medium">Mật khẩu mới</label>
-                        <input
-                            type="password"
-                            value={newPassword}
-                            onChange={(e) => setNewPassword(e.target.value)}
-                            className={`w-full border rounded-lg px-3 py-2 mt-1 focus:ring-2 focus:ring-blue-500 ${errors.new ? "border-red-500" : "border-gray-300"
-                                }`}
-                        />
+
+                        <div className="relative">
+                            <input
+                                type={showNew ? "text" : "password"}
+                                value={newPassword}
+                                onChange={(e) => setNewPassword(e.target.value)}
+                                className={`w-full border rounded-lg px-3 py-2 mt-1 pr-10 focus:ring-2 focus:ring-blue-500 ${errors.new ? "border-red-500" : "border-gray-300"
+                                    }`}
+                            />
+
+                            <button
+                                type="button"
+                                onClick={() => setShowNew(!showNew)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                            >
+                                {showNew ? "🙈" : "👁"}
+                            </button>
+                        </div>
+
                         {errors.new && (
                             <p className="text-red-500 text-sm mt-1">{errors.new}</p>
                         )}
@@ -85,13 +161,25 @@ const ChangePasswordPage = () => {
                         <label className="block text-sm font-medium">
                             Xác nhận mật khẩu
                         </label>
-                        <input
-                            type="password"
-                            value={confirmPassword}
-                            onChange={(e) => setConfirmPassword(e.target.value)}
-                            className={`w-full border rounded-lg px-3 py-2 mt-1 focus:ring-2 focus:ring-blue-500 ${errors.confirm ? "border-red-500" : "border-gray-300"
-                                }`}
-                        />
+
+                        <div className="relative">
+                            <input
+                                type={showConfirm ? "text" : "password"}
+                                value={confirmPassword}
+                                onChange={(e) => setConfirmPassword(e.target.value)}
+                                className={`w-full border rounded-lg px-3 py-2 mt-1 pr-10 focus:ring-2 focus:ring-blue-500 ${errors.confirm ? "border-red-500" : "border-gray-300"
+                                    }`}
+                            />
+
+                            <button
+                                type="button"
+                                onClick={() => setShowConfirm(!showConfirm)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                            >
+                                {showConfirm ? "🙈" : "👁"}
+                            </button>
+                        </div>
+
                         {errors.confirm && (
                             <p className="text-red-500 text-sm mt-1">{errors.confirm}</p>
                         )}
@@ -114,6 +202,65 @@ const ChangePasswordPage = () => {
                         </button>
                     </div>
                 </form>
+                {showOtpModal && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+                        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 animate-fadeIn">
+
+                            {/* Header */}
+                            <div className="flex justify-between items-center mb-4">
+                                <h2 className="text-xl font-semibold text-gray-800">
+                                    Nhập mã OTP
+                                </h2>
+                                <button
+                                    onClick={() => {
+                                        setOtp("");          // reset OTP
+                                        setShowOtpModal(false);
+                                        Cookies.remove("newPassword");
+                                    }}
+                                    className="text-gray-400 hover:text-red-500 text-xl"
+                                >
+                                    ×
+                                </button>
+                            </div>
+
+                            {/* Body */}
+                            <div className="mb-4">
+                                <p className="text-sm text-gray-500 mb-2">
+                                    Vui lòng nhập mã OTP đã gửi về email của bạn 📩
+                                </p>
+
+                                <input
+                                    type="text"
+                                    value={otp}
+                                    onChange={(e) => setOtp(e.target.value)}
+                                    placeholder="Nhập OTP..."
+                                    className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-center tracking-widest text-lg"
+                                />
+                            </div>
+
+                            {/* Footer */}
+                            <div className="flex justify-end gap-3">
+                                <button
+                                    onClick={() => {
+                                        setOtp("");          // reset OTP
+                                        setShowOtpModal(false);
+                                        Cookies.remove("newPassword");
+                                    }}
+                                    className="px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300"
+                                >
+                                    Hủy
+                                </button>
+
+                                <button
+                                    onClick={handleConfirmOtp}
+                                    className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700"
+                                >
+                                    Xác nhận
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );
