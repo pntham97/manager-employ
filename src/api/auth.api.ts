@@ -49,6 +49,14 @@ export const authApi = {
 
     // Đổi mật khẩu nhân viên
     changePassword(userId: string, newPassword: string): Promise<ApiResponse<any>> {
-        return axiosClient.post(`/auth/change-password`, { userId, newPassword });
+        return axiosClient.put(`/auth/users/password`, { userId, newPassword });
     },
+    // Đổi mật khẩu nhân viên
+    changePasswordAdmin(oldPassword: string): Promise<ApiResponse<any>> {
+        return axiosClient.post(`/auth/change-password/request-otp`, { oldPassword });
+    },
+    confirmChangePassword(otp: string, newPassword: string): Promise<ApiResponse<any>> {
+        return axiosClient.put(`/auth/change-password/confirm`, { otp, newPassword });
+    },
+
 };
