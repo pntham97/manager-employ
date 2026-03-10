@@ -16,6 +16,8 @@ import AddEmploys from "../pages/AddEmploys";
 import PrivateRoute from "../pages/PrivateRoute";
 import ChangePasswordPage from "../pages/ChangePassword";
 import ProfilePage from "../pages/ManagerInformation";
+import CreateProject from "../pages/CreateProject";
+import TaskBoard from "../pages/TaskBoard";
 
 const AppRoutes = () => {
     return (
@@ -31,7 +33,9 @@ const AppRoutes = () => {
                     <Route element={<MainLayout />}>
                         <Route path="/" element={<Dashboard />} />
                         <Route path="/wage" element={<Wage />} />
-                        <Route path="/projects" element={<Projects />} />.
+                        <Route path="/projects" element={<Projects />} />
+                        <Route path="/projects/create" element={<CreateProject />} />
+                        <Route path="/projects/:id/board" element={<TaskBoard />} />
                         <Route path="/calendar" element={<Calendar />} />
                         <Route path="/schedule-approval" element={<ScheduleApproval />} />
                         <Route path="/schedule-management" element={<ScheduleManagement />} />
