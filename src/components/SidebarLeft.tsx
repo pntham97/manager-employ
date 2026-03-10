@@ -299,10 +299,10 @@ const SidebarLeft: React.FC = () => {
                 {/* <div className="border-t border-gray-300 my-2" /> */}
 
                 {/* SETTINGS */}
-                <NavLink to="/manager-infomation" className={navItemClass}>
+                {/* <NavLink to="/manager-infomation" className={navItemClass}>
                     <User className="w-5 h-5" />
                     {!collapsed && <span>Quản lý thông tin</span>}
-                </NavLink>
+                </NavLink> */}
                 <NavLink to="/change-password" className={navItemClass}>
                     <Key className="w-5 h-5" />
                     {!collapsed && <span>Đổi mật khẩu</span>}
