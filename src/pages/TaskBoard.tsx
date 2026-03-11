@@ -76,6 +76,7 @@ const TaskBoard = () => {
     const [isAddingChecklistItem, setIsAddingChecklistItem] = useState(false);
     const [newChecklistItemText, setNewChecklistItemText] = useState('');
     const [tempTitle, setTempTitle] = useState('');
+    const [openLabel, setOpenLabel] = useState(false);
 
     useEffect(() => {
         if (selectedTaskId && data.tasks[selectedTaskId]) {
@@ -126,7 +127,8 @@ const TaskBoard = () => {
                                 deadline: t.deadline,
                                 assignments: t.listAssignmentEmployee,
                                 progress: t.progress ?? 0,
-                                subTasks: t.subTasks ?? []
+                                subTasks: t.subTasks ?? [],
+                                labels: t.labelColors || []
                             };
                         });
                     } else {
@@ -327,7 +329,8 @@ const TaskBoard = () => {
             try {
                 const numericTaskId = Number(draggableId.replace('task-', ''));
                 await projectApi.updateBoardTask(numericTaskId, {
-                    position: destination.index + 1
+                    position: destination.index + 1,
+                    labelColors: []
                 });
             } catch (err) {
                 console.error("Failed to sync same-column task move", err);
@@ -368,7 +371,8 @@ const TaskBoard = () => {
             // Use the new total length as the new position (1-based or 0-based depending on API, assuming 1-based or just length)
             await projectApi.updateBoardTask(numericTaskId, {
                 columnTaskId: numericFinishColumnId,
-                position: finishTaskIds.length
+                position: finishTaskIds.length,
+                labelColors: [],
             });
         } catch (err) {
             console.error("Failed to sync cross-column task move", err);
@@ -637,6 +641,89 @@ const TaskBoard = () => {
         );
     }
 
+    const labelColors = [
+        "#61BD4F",
+        "#F2D600",
+        "#FF9F1A",
+        "#EB5A46",
+        "#C377E0",
+        "#0079BF",
+        "#00C2E0",
+        "#51E898"
+    ];
+
+    const addLabelToTask = async (color: string) => {
+        if (!selectedTaskId) return;
+
+        const task = data.tasks[selectedTaskId];
+        const labels = task.labels || [];
+
+        if (labels.includes(color)) return;
+
+        const newLabels = [...labels, color];
+
+        // Update UI
+        setData(prev => ({
+            ...prev,
+            tasks: {
+                ...prev.tasks,
+                [selectedTaskId]: {
+                    ...task,
+                    labels: newLabels
+                }
+            }
+        }));
+
+        // Call API
+        try {
+            const numericTaskId = Number(selectedTaskId.replace('task-', ''));
+
+            await projectApi.updateBoardTask(numericTaskId, {
+                labelColors: newLabels
+            });
+
+        } catch (err) {
+            console.error("Failed to update labels", err);
+            toast.error("Không thể cập nhật nhãn");
+        }
+
+        setOpenLabel(false);
+    };
+
+    const removeLabel = async (color: string) => {
+        if (!selectedTaskId) return;
+
+        const task = data.tasks[selectedTaskId];
+        const labels = task.labels || [];
+
+        const newLabels = labels.filter(c => c !== color);
+
+        // Update UI
+        setData(prev => ({
+            ...prev,
+            tasks: {
+                ...prev.tasks,
+                [selectedTaskId]: {
+                    ...task,
+                    labels: newLabels
+                }
+            }
+        }));
+
+        // Call API
+        try {
+            const numericTaskId = Number(selectedTaskId.replace('task-', ''));
+
+            await projectApi.updateBoardTask(numericTaskId, {
+                labelColors: newLabels
+            });
+
+        } catch (err) {
+            console.error("Failed to remove label", err);
+            toast.error("Không thể xoá nhãn");
+        }
+    };
+
     return (
         <div className="w-full h-full p-8 overflow-x-auto bg-slate-50 dark:bg-slate-950 min-h-screen">
             {/* Modal Detail Task */}
@@ -699,17 +786,55 @@ const TaskBoard = () => {
                                 <div className="flex flex-wrap gap-4 ml-10">
                                     {/* Labels */}
                                     <div>
-                                        <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">Nhãn</p>
-                                        <div className="flex gap-2">
-                                            {selectedTask.labels?.map((color, idx) => (
-                                                <div key={idx} style={{ backgroundColor: color }} className="w-12 h-8 rounded-md" />
+                                        <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">
+                                            Nhãn
+                                        </p>
+
+                                        <div className="flex flex-wrap gap-2">
+
+                                            {selectedTask?.labels?.map((color, idx) => (
+                                                <div
+                                                    key={idx}
+                                                    onClick={() => removeLabel(color)}
+                                                    className="w-12 h-6 rounded-md cursor-pointer hover:brightness-110 flex items-center justify-center"
+                                                    style={{ backgroundColor: color }}
+                                                >
+                                                    <span className="material-symbols-outlined text-white text-[14px] opacity-0 hover:opacity-100">
+                                                        close
+                                                    </span>
+                                                </div>
                                             ))}
-                                            <button className="w-8 h-8 rounded-md bg-slate-200 dark:bg-slate-800 flex items-center justify-center text-slate-600 hover:bg-slate-300">
-                                                <span className="material-symbols-outlined text-[18px]">add</span>
+
+                                            <button
+                                                onClick={() => setOpenLabel(!openLabel)}
+                                                className="w-7 h-7 flex items-center justify-center rounded-md bg-slate-200 hover:bg-slate-300"
+                                            >
+                                                <span className="material-symbols-outlined text-[18px]">
+                                                    add
+                                                </span>
                                             </button>
+
                                         </div>
                                     </div>
+                                    {openLabel && (
+                                        <div className="absolute mt-2 bg-white shadow-lg rounded-lg p-3 w-56 z-50">
 
+                                            <p className="text-sm font-semibold mb-2">Chọn nhãn</p>
+
+                                            <div className="grid grid-cols-4 gap-2">
+
+                                                {labelColors.map((color) => (
+                                                    <div
+                                                        key={color}
+                                                        onClick={() => addLabelToTask(color)}
+                                                        className="h-8 rounded cursor-pointer hover:scale-105"
+                                                        style={{ backgroundColor: color }}
+                                                    />
+                                                ))}
+
+                                            </div>
+                                        </div>
+                                    )}
                                     {/* Deadline */}
                                     <div>
                                         <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">Hạn chót</p>
@@ -1255,6 +1380,17 @@ const TaskBoard = () => {
                                                                 : 'border-slate-100 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
                                                                 }`}
                                                         >
+                                                            {task.labels && task.labels.length > 0 && (
+                                                                <div className="flex gap-1 flex-wrap">
+                                                                    {task.labels.map((color, idx) => (
+                                                                        <div
+                                                                            key={idx}
+                                                                            className="w-10 h-2 rounded-sm"
+                                                                            style={{ backgroundColor: color }}
+                                                                        />
+                                                                    ))}
+                                                                </div>
+                                                            )}
                                                             <div className="flex justify-between items-start mb-2 group-actions">
                                                                 <p className="text-sm font-medium text-slate-700 dark:text-slate-300 flex-1">{task.content}</p>
                                                                 <button

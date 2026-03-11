@@ -136,6 +136,7 @@ export interface TaskItem {
     listAssignmentEmployee?: TaskAssignment[];
     progress?: number;
     subTasks?: SubTaskItem[];
+    labelColors: string[];
 }
 
 export interface SubTaskItem {
@@ -197,4 +198,5 @@ export interface TaskUpdateRequest {
     position?: number;
     deadline?: string;
     projectAssignmentIds?: number[];
+    labelColors: string[];
 }

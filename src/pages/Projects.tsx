@@ -32,6 +32,11 @@ const Projects = () => {
         setEditingProject(null);
     };
 
+    function averageArray(arr: any) {
+        const sum = arr.reduce((total: number, num: number) => total + num, 0);
+        return sum / arr.length;
+    }
+
     const fetchProjects = async () => {
         setLoading(true);
         try {
@@ -65,7 +70,7 @@ const Projects = () => {
                 // Normalize data structure for UI
                 const normalizedProjects = projectList.map((p: any) => ({
                     ...p,
-                    progress: p.progress || 0,
+                    progress: averageArray(p.taskProgresses) || 0,
                     members: p.members || (p.assignments ? p.assignments.map((a: any) => a.employee || a) : [])
                 }));
                 setProjects(normalizedProjects);
@@ -76,8 +81,11 @@ const Projects = () => {
                     completed = projectList.filter((p: any) => p.status?.statusName === 'COMPLETED' || p.status?.description?.toLowerCase().includes('hoàn thành')).length;
                     overdue = projectList.filter((p: any) => p.status?.statusName === 'OVERDUE' || p.status?.description?.toLowerCase().includes('quá hạn')).length;
                 }
-
+                        console.log(projectList
+ , "projectList");
+                        
                 setStats({ total, inProgress, completed, overdue });
+               
             }
         } catch (err) {
             console.error("Failed to fetch projects", err);
@@ -111,9 +119,6 @@ const Projects = () => {
         if (name.includes("quá hạn")) return "bg-red-600";
         return "bg-slate-400";
     };
-
-    console.log(projects , "projects");
-    
 
     return (
         <div className="max-w-[1240px] h-full py-10 px-6 mx-auto flex flex-col gap-10">
@@ -244,7 +249,7 @@ const Projects = () => {
                             <div className="mb-6">
                                 <div className="flex justify-between text-[11px] font-bold mb-2">
                                     <span className="text-slate-400 uppercase tracking-wider">Tiến trình đạt được</span>
-                                    <span className="text-slate-900 dark:text-white">{project.progress}%</span>
+                                    <span className="text-slate-900 dark:text-white">{Math.round(project.progress)}%</span>
                                 </div>
                                 <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2.5 overflow-hidden">
                                     <div
