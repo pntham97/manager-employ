@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { toast } from "react-toastify";
 
 const ProfilePage = () => {
     const navigate = useNavigate();
@@ -13,7 +14,7 @@ const ProfilePage = () => {
         // TODO: call API update profile ở đây
         console.log({ name, email });
 
-        alert("Cập nhật thông tin thành công 🎉");
+        toast.success("Cập nhật thông tin thành công 🎉");
         navigate(-1); // quay lại trang trước
     };
 
