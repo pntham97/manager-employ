@@ -1,630 +1,59 @@
-import { useState, useRef, useEffect } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import type { DropResult } from '@hello-pangea/dnd';
 import { useParams } from 'react-router-dom';
 import { projectApi } from '../api/project.api';
 import { toast } from 'react-toastify';
-import type { TaskAssignment, SubTaskItem } from '../types/project';
-
-interface Activity {
-    id: string;
-    user: string;
-    action: string;
-    timestamp: string;
-}
-
-interface Task {
-    id: string;
-    content: string;
-    description?: string;
-    labels?: string[];
-    subTasks?: SubTaskItem[];
-    progress?: number;
-    activity?: Activity[];
-    coverImage?: string;
-    category?: string;
-    deadline?: string;
-    assignments?: TaskAssignment[];
-}
-
-interface ColumnData {
-    id: string;
-    title: string;
-    taskIds: string[];
-}
-
-interface BoardData {
-    tasks: Record<string, Task>;
-    columns: Record<string, ColumnData>;
-    columnOrder: string[];
-}
-
-function getProgressColor(progress: number): { bar: string; text: string } {
-    if (progress <= 0) return { bar: 'bg-slate-400', text: 'text-slate-400' };
-    if (progress <= 25) return { bar: 'bg-red-500', text: 'text-red-500' };
-    if (progress <= 50) return { bar: 'bg-amber-500', text: 'text-amber-500' };
-    if (progress <= 75) return { bar: 'bg-blue-500', text: 'text-blue-500' };
-    if (progress < 100) return { bar: 'bg-teal-500', text: 'text-teal-500' };
-    return { bar: 'bg-green-500', text: 'text-green-500' };
-}
+import { useTaskBoard } from '../hooks/useTaskBoard';
+import { getProgressColor } from '../utils/taskboard';
+import { RichTextEditor } from '../components/RichTextEditor';
 
 const TaskBoard = () => {
     const { id } = useParams<{ id: string }>();
-    const [boardId, setBoardId] = useState<number | null>(null);
-    const [data, setData] = useState<BoardData>({
-        tasks: {},
-        columns: {
-            'column-1': { id: 'column-1', title: 'To Do', taskIds: [] },
-            'column-2': { id: 'column-2', title: 'In Progress', taskIds: [] },
-            'column-3': { id: 'column-3', title: 'Done', taskIds: [] },
-        },
-        columnOrder: ['column-1', 'column-2', 'column-3'],
-    });
-    const [loading, setLoading] = useState(true);
-    const [projectMembers, setProjectMembers] = useState<any[]>([]);
-    const [isMemberDropdownOpen, setIsMemberDropdownOpen] = useState(false);
-
-    const [newTaskContent, setNewTaskContent] = useState('');
-    const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-    const descriptionRef = useRef<HTMLDivElement>(null);
-    const [isAddingTask, setIsAddingTask] = useState<string | null>(null);
-    const [isAddingColumn, setIsAddingColumn] = useState(false);
-    const [newColumnTitle, setNewColumnTitle] = useState('');
-    const [editingColumnId, setEditingColumnId] = useState<string | null>(null);
-    const [isEditingDescription, setIsEditingDescription] = useState(false);
-    const [tempDescription, setTempDescription] = useState('');
-    const [isAddingChecklistItem, setIsAddingChecklistItem] = useState(false);
-    const [newChecklistItemText, setNewChecklistItemText] = useState('');
-    const [tempTitle, setTempTitle] = useState('');
-
-    useEffect(() => {
-        if (selectedTaskId && data.tasks[selectedTaskId]) {
-            setTempTitle(data.tasks[selectedTaskId].content);
-        }
-    }, [selectedTaskId, selectedTaskId ? data.tasks[selectedTaskId]?.content : undefined]);
-
-    useEffect(() => {
-        const fetchTasks = async () => {
-            if (!id) return;
-            try {
-                setLoading(true);
-                const res = await projectApi.getBoardTasksByProjectId(Number(id));
-                console.log("board tasks", res.data);
-                // If board exists, map its nested columns and tasks
-                if (res.data && res.data.length > 0) {
-                    const board = res.data[0];
-                    setBoardId(board.id);
-                    const tasksObj: Record<string, Task> = {};
-                    const columnsObj: Record<string, ColumnData> = {};
-                    const columnOrder: string[] = [];
-
-                    board.columns.sort((a, b) => a.position - b.position).forEach(col => {
-                        const colId = `column-${col.id}`;
-                        const taskIds: string[] = [];
-
-                        // We can still use the tasks inside columns to maintain ordering if the backend returns them sorted
-                        col.tasks.sort((a, b) => a.position - b.position).forEach(t => {
-                            taskIds.push(`task-${t.id}`);
-                        });
-
-                        columnsObj[colId] = {
-                            id: colId,
-                            title: col.title,
-                            taskIds: taskIds
-                        };
-                        columnOrder.push(colId);
-                    });
-
-                    // Populate tasks metadata from the new flat list (which has assignments, progress, subTasks)
-                    if (board.tasks && Array.isArray(board.tasks)) {
-                        board.tasks.forEach(t => {
-                            const taskId = `task-${t.id}`;
-                            tasksObj[taskId] = {
-                                id: taskId,
-                                content: t.title,
-                                description: t.description,
-                                deadline: t.deadline,
-                                assignments: t.listAssignmentEmployee,
-                                progress: t.progress ?? 0,
-                                subTasks: t.subTasks ?? []
-                            };
-                        });
-                    } else {
-                        // Fallback: if board.tasks is missing, populate from columns
-                        board.columns.forEach(col => {
-                            col.tasks.forEach(t => {
-                                const taskId = `task-${t.id}`;
-                                if (!tasksObj[taskId]) {
-                                    tasksObj[taskId] = {
-                                        id: taskId,
-                                        content: t.title,
-                                        description: t.description,
-                                        progress: t.progress ?? 0,
-                                        subTasks: t.subTasks ?? [],
-                                        assignments: t.listAssignmentEmployee
-                                    };
-                                }
-                            });
-                        });
-                    }
-
-                    // Fetch project members
-                    const projectRes = await projectApi.getProjectById(Number(id));
-                    if (projectRes.data) {
-                        setProjectMembers(projectRes.data.assignments || []);
-                    }
-
-                    setData({
-                        tasks: tasksObj,
-                        columns: columnsObj,
-                        columnOrder: columnOrder
-                    });
-                } else {
-                    // If no board exists, create one with default columns
-                    const projectRes = await projectApi.getProjectById(Number(id));
-                    const project = projectRes.data;
-
-                    if (project) {
-                        // Also set members for a new board
-                        setProjectMembers(project.assignments || []);
-
-                        const createPayload = {
-                            projectId: Number(id),
-                            title: project.projectName,
-                            description: `Phân chia công việc cho ${project.projectName}`,
-                            columns: [
-                                { title: "To Do", position: 1 },
-                                { title: "In Progress", position: 2 },
-                                { title: "Done", position: 3 }
-                            ]
-                        };
-
-                        const newBoardRes = await projectApi.createBoardTask(createPayload);
-                        if (newBoardRes.data) {
-                            toast.info("Đã khởi tạo bảng công việc mới cho dự án");
-                            const board = newBoardRes.data;
-                            setBoardId(board.id);
-                            const tasksObj: Record<string, Task> = {};
-                            const columnsObj: Record<string, ColumnData> = {};
-                            const columnOrder: string[] = [];
-
-                            board.columns.forEach(col => {
-                                const colId = `column-${col.id}`;
-                                columnsObj[colId] = {
-                                    id: colId,
-                                    title: col.title,
-                                    taskIds: []
-                                };
-                                columnOrder.push(colId);
-                            });
-
-                            setData({
-                                tasks: tasksObj,
-                                columns: columnsObj,
-                                columnOrder: columnOrder
-                            });
-                        }
-                    }
-                }
-            } catch (err) {
-                console.error("Failed to fetch or create board tasks", err);
-                toast.error("Không thể tải bảng công việc");
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchTasks();
-    }, [id]);
-
-    const fetchTaskDetail = async (taskKey: string | null) => {
-        if (!taskKey) return;
-        const numericTaskId = Number(taskKey.replace('task-', ''));
-        try {
-            const res = await projectApi.getBoardTaskDetail(numericTaskId);
-            if (res.data) {
-                const t = res.data;
-                setData(prev => ({
-                    ...prev,
-                    tasks: {
-                        ...prev.tasks,
-                        [taskKey]: {
-                            ...prev.tasks[taskKey],
-                            content: t.title,
-                            description: t.description,
-                            deadline: t.deadline,
-                            assignments: t.listAssignmentEmployee,
-                            progress: t.progress ?? 0,
-                            subTasks: t.subTasks ?? []
-                        }
-                    }
-                }));
-            }
-        } catch (err) {
-            console.error("Failed to fetch task detail", err);
-        }
-    };
-
-    useEffect(() => {
-        fetchTaskDetail(selectedTaskId);
-    }, [selectedTaskId]);
-
-
-
-    const updateTask = async (taskId: string, updates: Partial<Task>) => {
-        // Update local state first for responsiveness
-        setData(prev => ({
-            ...prev,
-            tasks: {
-                ...prev.tasks,
-                [taskId]: {
-                    ...prev.tasks[taskId],
-                    ...updates,
-                },
-            },
-        }));
-
-        const numericTaskId = Number(taskId.replace('task-', ''));
-        try {
-            const payload: any = {};
-            if (updates.content !== undefined) payload.title = updates.content;
-            if (updates.description !== undefined) payload.description = updates.description;
-            if (updates.deadline !== undefined) payload.deadline = updates.deadline;
-            if (updates.assignments !== undefined) {
-                payload.projectAssignmentIds = updates.assignments.map(a => a.id);
-            }
-
-            // Note: columnTaskId and position are handled by drag-and-drop usually, 
-            // but can be included if updateTask is used for movement.
-
-            await projectApi.updateBoardTask(numericTaskId, payload);
-        } catch (err) {
-            console.error("Failed to update task on server", err);
-            toast.error("Không thể lưu thay đổi vào máy chủ");
-        }
-    };
-
-    const selectedTask = selectedTaskId ? data.tasks[selectedTaskId] : null;
-
-    const selectedTaskColumn = selectedTaskId
-        ? Object.values(data.columns).find(col => col.taskIds.includes(selectedTaskId))
-        : null;
-
-    const onDragEnd = async (result: DropResult) => {
-        const { destination, source, draggableId } = result;
-
-        if (!destination) return;
-
-        if (
-            destination.droppableId === source.droppableId &&
-            destination.index === source.index
-        ) {
-            return;
-        }
-
-        const startColumn = data.columns[source.droppableId];
-        const finishColumn = data.columns[destination.droppableId];
-
-        if (startColumn === finishColumn) {
-            const newTaskIds = Array.from(startColumn.taskIds);
-            newTaskIds.splice(source.index, 1);
-            newTaskIds.splice(destination.index, 0, draggableId);
-
-            const newColumn = {
-                ...startColumn,
-                taskIds: newTaskIds,
-            };
-
-            setData({
-                ...data,
-                columns: {
-                    ...data.columns,
-                    [newColumn.id]: newColumn,
-                },
-            });
-
-            // Persist same-column move
-            try {
-                const numericTaskId = Number(draggableId.replace('task-', ''));
-                await projectApi.updateBoardTask(numericTaskId, {
-                    position: destination.index + 1
-                });
-            } catch (err) {
-                console.error("Failed to sync same-column task move", err);
-                toast.error("Không thể thay đổi thứ tự công việc");
-            }
-            return;
-        }
-
-        // Moving from one list to another
-        const startTaskIds = Array.from(startColumn.taskIds);
-        startTaskIds.splice(source.index, 1);
-        const newStart = {
-            ...startColumn,
-            taskIds: startTaskIds,
-        };
-
-        const finishTaskIds = Array.from(finishColumn.taskIds);
-        // User request: always put at the end when moving to a new column
-        finishTaskIds.push(draggableId);
-        const newFinish = {
-            ...finishColumn,
-            taskIds: finishTaskIds,
-        };
-
-        setData({
-            ...data,
-            columns: {
-                ...data.columns,
-                [newStart.id]: newStart,
-                [newFinish.id]: newFinish,
-            },
-        });
-
-        // Persist to backend (cross-column)
-        try {
-            const numericTaskId = Number(draggableId.replace('task-', ''));
-            const numericFinishColumnId = Number(destination.droppableId.replace('column-', ''));
-            // Use the new total length as the new position (1-based or 0-based depending on API, assuming 1-based or just length)
-            await projectApi.updateBoardTask(numericTaskId, {
-                columnTaskId: numericFinishColumnId,
-                position: finishTaskIds.length
-            });
-        } catch (err) {
-            console.error("Failed to sync cross-column task move", err);
-            toast.error("Không thể di chuyển công việc");
-        }
-    };
-
-    const addTask = async (columnId: string) => {
-        if (!newTaskContent.trim() || !boardId) return;
-
-        const numericColumnId = Number(columnId.replace('column-', ''));
-        const column = data.columns[columnId];
-        const newPosition = column.taskIds.length + 1;
-
-        try {
-            const payload = {
-                title: newTaskContent.trim(),
-                columnTaskId: numericColumnId,
-                boardTaskId: boardId,
-                position: newPosition
-            };
-
-            const res = await projectApi.createTask(payload);
-            console.log(res.data);
-
-            if (res.data) {
-                const newTaskFromServer = res.data;
-                const newTaskId = `task-${newTaskFromServer.id}`;
-
-                const newTask: Task = {
-                    id: newTaskId,
-                    content: newTaskFromServer.title,
-                    description: newTaskFromServer.description,
-                    deadline: newTaskFromServer.deadline,
-                    assignments: newTaskFromServer.listAssignmentEmployee
-                };
-
-                const newTaskIds = Array.from(column.taskIds);
-                newTaskIds.push(newTaskId);
-
-                setData({
-                    ...data,
-                    tasks: {
-                        ...data.tasks,
-                        [newTaskId]: newTask,
-                    },
-                    columns: {
-                        ...data.columns,
-                        [columnId]: {
-                            ...column,
-                            taskIds: newTaskIds,
-                        },
-                    },
-                });
-
-                setNewTaskContent('');
-                setIsAddingTask(null);
-                toast.success("Đã thêm công việc mới");
-            }
-        } catch (error) {
-            console.error("Lỗi khi thêm công việc:", error);
-            toast.error("Không thể thêm công việc mới. Vui lòng thử lại.");
-        }
-    };
-
-    const toggleSubTask = async (taskId: string, subTask: SubTaskItem) => {
-        try {
-            await projectApi.updateSubTask(subTask.id, { isDone: !subTask.isDone });
-            await fetchTaskDetail(taskId);
-        } catch (err) {
-            console.error("Failed to toggle sub task", err);
-            toast.error("Không thể cập nhật công việc con");
-        }
-    };
-
-    const handleEditDescription = () => {
-        if (selectedTask) {
-            setTempDescription(selectedTask.description || '');
-            setIsEditingDescription(true);
-        }
-    };
-
-    const insertFormatting = (command: string, value: string | undefined = undefined) => {
-        document.execCommand(command, false, value);
-        if (descriptionRef.current) {
-            descriptionRef.current.focus();
-        }
-    };
-
-    const insertList = () => {
-        document.execCommand('insertUnorderedList');
-    };
-
-    const insertHeading = () => {
-        document.execCommand('formatBlock', false, '<h3>');
-    };
-
-    const addSubTask = async (taskId: string, text: string) => {
-        if (!text.trim()) return;
-        const numericTaskId = Number(taskId.replace('task-', ''));
-        try {
-            await projectApi.createSubTask({
-                title: text.trim(),
-                taskId: numericTaskId
-            });
-            setNewChecklistItemText('');
-            setIsAddingChecklistItem(false);
-            await fetchTaskDetail(taskId);
-        } catch (err) {
-            console.error("Failed to add sub task", err);
-            toast.error("Không thể thêm công việc con");
-        }
-    };
-
-    const addColumn = async () => {
-        if (!newColumnTitle.trim() || !boardId) return;
-
-        // Persist to backend first to get the real ID
-        try {
-            const res = await projectApi.addColumn(boardId, {
-                title: newColumnTitle,
-                position: data.columnOrder.length + 1
-            });
-
-            if (res.data) {
-                const newCol = res.data;
-                const newColumnId = `column-${newCol.id}`;
-                const newColumn: ColumnData = {
-                    id: newColumnId,
-                    title: newCol.title,
-                    taskIds: [],
-                };
-
-                setData(prev => ({
-                    ...prev,
-                    columns: {
-                        ...prev.columns,
-                        [newColumnId]: newColumn,
-                    },
-                    columnOrder: [...prev.columnOrder, newColumnId],
-                }));
-
-                setNewColumnTitle('');
-                setIsAddingColumn(false);
-                toast.success("Đã thêm cột mới thành công");
-            }
-        } catch (err) {
-            console.error("Failed to add column", err);
-            toast.error("Không thể thêm cột mới");
-        }
-    };
-
-    const updateColumnTitle = async (columnId: string, newTitle: string) => {
-        if (!newTitle.trim() || !boardId) {
-            setEditingColumnId(null);
-            return;
-        }
-
-        const newData = {
-            ...data,
-            columns: {
-                ...data.columns,
-                [columnId]: {
-                    ...data.columns[columnId],
-                    title: newTitle,
-                },
-            },
-        };
-
-        setData(newData);
-        setEditingColumnId(null);
-
-        // Persist to backend
-        try {
-            const payload = newData.columnOrder.map((id, index) => ({
-                title: newData.columns[id].title,
-                position: index + 1
-            }));
-            await projectApi.updateBoardTaskColumns(boardId, payload);
-        } catch (err) {
-            console.error("Failed to sync column title", err);
-            toast.error("Không thể cập nhật tên cột");
-        }
-    };
-
-    const deleteTask = async (columnId: string, taskId: string) => {
-        const column = data.columns[columnId];
-        const newTaskIds = column.taskIds.filter(id => id !== taskId);
-
-        const newTasks = { ...data.tasks };
-        const numericTaskId = Number(taskId.replace('task-', ''));
-
-        delete newTasks[taskId];
-
-        setData({
-            ...data,
-            tasks: newTasks,
-            columns: {
-                ...data.columns,
-                [columnId]: {
-                    ...column,
-                    taskIds: newTaskIds,
-                },
-            },
-        });
-
-        try {
-            await projectApi.deleteTask(numericTaskId);
-            toast.success("Đã xoá công việc");
-        } catch (err) {
-            console.error("Failed to delete task on server", err);
-            toast.error("Không thể xoá công việc trên máy chủ");
-        }
-    };
-
-    const deleteColumn = async (columnId: string) => {
-        if (!boardId || !window.confirm('Bạn có chắc chắn muốn xoá cột này và tất cả các thẻ bên trong?')) return;
-
-        const numericId = Number(columnId.replace('column-', ''));
-        const isNumericId = !isNaN(numericId) && numericId < 1e12; // Simple check to distinguish DB ID from timestamp
-
-        const newColumns = { ...data.columns };
-        const deletedColumnTaskIds = newColumns[columnId].taskIds;
-        delete newColumns[columnId];
-
-        const newTasks = { ...data.tasks };
-        deletedColumnTaskIds.forEach(taskId => delete newTasks[taskId]);
-
-        const newColumnOrder = data.columnOrder.filter(id => id !== columnId);
-
-        const newData = {
-            tasks: newTasks,
-            columns: newColumns,
-            columnOrder: newColumnOrder,
-        };
-
-        setData(newData);
-
-        // Persist to backend
-        try {
-            if (isNumericId) {
-                await projectApi.deleteColumn(numericId);
-            } else {
-                const payload = newData.columnOrder.map((id, index) => ({
-                    title: newData.columns[id].title,
-                    position: index + 1
-                }));
-                await projectApi.updateBoardTaskColumns(boardId, payload);
-            }
-        } catch (err) {
-            console.error("Failed to sync deletion", err);
-            toast.error("Không thể xoá cột");
-        }
-    };
-
-
+    const {
+        data,
+        loading,
+        projectMembers,
+        setSelectedTaskId,
+        selectedTask,
+        selectedTaskColumn,
+        isMemberDropdownOpen,
+        setIsMemberDropdownOpen,
+        newTaskContent,
+        setNewTaskContent,
+        isAddingTask,
+        setIsAddingTask,
+        isAddingColumn,
+        setIsAddingColumn,
+        newColumnTitle,
+        setNewColumnTitle,
+        editingColumnId,
+        setEditingColumnId,
+        isEditingDescription,
+        setIsEditingDescription,
+        tempDescription,
+        setTempDescription,
+        tempTitle,
+        setTempTitle,
+        isAddingChecklistItem,
+        setIsAddingChecklistItem,
+        newChecklistItemText,
+        setNewChecklistItemText,
+        showChecklistSection,
+        setShowChecklistSection,
+        fetchTaskDetail,
+        updateTask,
+        onDragEnd,
+        addTask,
+        toggleSubTask,
+        handleEditDescription,
+        addSubTask,
+        addColumn,
+        updateColumnTitle,
+        deleteTask,
+        deleteColumn,
+        isColumnDropdownOpen,
+        setIsColumnDropdownOpen,
+        moveTaskToColumn,
+    } = useTaskBoard(id);
 
     if (loading) {
         return (
@@ -636,6 +65,89 @@ const TaskBoard = () => {
             </div>
         );
     }
+
+    const labelColors = [
+        "#61BD4F",
+        "#F2D600",
+        "#FF9F1A",
+        "#EB5A46",
+        "#C377E0",
+        "#0079BF",
+        "#00C2E0",
+        "#51E898"
+    ];
+
+    // const addLabelToTask = async (color: string) => {
+    //     if (!selectedTaskId) return;
+
+    //     const task = data.tasks[selectedTaskId];
+    //     const labels = task.labels || [];
+
+    //     if (labels.includes(color)) return;
+
+    //     const newLabels = [...labels, color];
+
+    //     // Update UI
+    //     setData(prev => ({
+    //         ...prev,
+    //         tasks: {
+    //             ...prev.tasks,
+    //             [selectedTaskId]: {
+    //                 ...task,
+    //                 labels: newLabels
+    //             }
+    //         }
+    //     }));
+
+    //     // Call API
+    //     try {
+    //         const numericTaskId = Number(selectedTaskId.replace('task-', ''));
+
+    //         await projectApi.updateBoardTask(numericTaskId, {
+    //             labelColors: newLabels
+    //         });
+
+    //     } catch (err) {
+    //         console.error("Failed to update labels", err);
+    //         toast.error("Không thể cập nhật nhãn");
+    //     }
+
+    //     setOpenLabel(false);
+    // };
+
+    // const removeLabel = async (color: string) => {
+    //     if (!selectedTaskId) return;
+
+    //     const task = data.tasks[selectedTaskId];
+    //     const labels = task.labels || [];
+
+    //     const newLabels = labels.filter(c => c !== color);
+
+    //     // Update UI
+    //     setData(prev => ({
+    //         ...prev,
+    //         tasks: {
+    //             ...prev.tasks,
+    //             [selectedTaskId]: {
+    //                 ...task,
+    //                 labels: newLabels
+    //             }
+    //         }
+    //     }));
+
+    //     // Call API
+    //     try {
+    //         const numericTaskId = Number(selectedTaskId.replace('task-', ''));
+
+    //         await projectApi.updateBoardTask(numericTaskId, {
+    //             labelColors: newLabels
+    //         });
+
+    //     } catch (err) {
+    //         console.error("Failed to remove label", err);
+    //         toast.error("Không thể xoá nhãn");
+    //     }
+    // };
 
     return (
         <div className="w-full h-full p-8 overflow-x-auto bg-slate-50 dark:bg-slate-950 min-h-screen">
@@ -649,9 +161,52 @@ const TaskBoard = () => {
                                 <img src={selectedTask.coverImage} className="w-full h-full object-cover" alt="cover" />
                             )}
                             <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-start">
-                                <button className="bg-white/90 hover:bg-white px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-1 shadow-sm">
-                                    {selectedTaskColumn?.title || 'Danh mục'} <span className="material-symbols-outlined text-sm">expand_more</span>
-                                </button>
+                                <div className="relative">
+                                    <button
+                                        onClick={() => setIsColumnDropdownOpen(!isColumnDropdownOpen)}
+                                        className="bg-white/90 hover:bg-white px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-1 shadow-sm"
+                                    >
+                                        {selectedTaskColumn?.title || 'Danh mục'} <span className="material-symbols-outlined text-sm">expand_more</span>
+                                    </button>
+                                    {isColumnDropdownOpen && (
+                                        <>
+                                            <div
+                                                className="fixed inset-0 z-10"
+                                                onClick={() => setIsColumnDropdownOpen(false)}
+                                            />
+                                            <div className="absolute top-full left-0 mt-2 w-56 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 z-20 py-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                                                <div className="px-3 pb-2 border-b border-slate-100 dark:border-slate-700 mb-2">
+                                                    <p className="text-[11px] font-bold text-slate-500 uppercase">Chuyển sang cột</p>
+                                                </div>
+                                                <div className="max-h-48 overflow-y-auto">
+                                                    {data.columnOrder.map((columnId) => {
+                                                        const column = data.columns[columnId];
+                                                        const isCurrent = columnId === selectedTaskColumn?.id;
+                                                        return (
+                                                            <button
+                                                                key={columnId}
+                                                                onClick={() => {
+                                                                    if (!isCurrent && selectedTask) {
+                                                                        moveTaskToColumn(selectedTask.id, columnId);
+                                                                    }
+                                                                }}
+                                                                disabled={isCurrent}
+                                                                className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm font-medium transition-colors ${
+                                                                    isCurrent
+                                                                        ? 'bg-slate-100 dark:bg-slate-700/50 text-slate-400 cursor-not-allowed'
+                                                                        : 'hover:bg-slate-100 dark:hover:bg-slate-700/50 text-slate-700 dark:text-slate-200'
+                                                                }`}
+                                                            >
+                                                                {isCurrent && <span className="material-symbols-outlined text-[16px]">check</span>}
+                                                                {column.title}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
                                 <div className="flex gap-2">
                                     <button className="w-8 h-8 rounded-md bg-white/90 hover:bg-white flex items-center justify-center shadow-sm">
                                         <span className="material-symbols-outlined text-[18px]">image</span>
@@ -698,18 +253,56 @@ const TaskBoard = () => {
 
                                 <div className="flex flex-wrap gap-4 ml-10">
                                     {/* Labels */}
-                                    <div>
-                                        <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">Nhãn</p>
-                                        <div className="flex gap-2">
-                                            {selectedTask.labels?.map((color, idx) => (
-                                                <div key={idx} style={{ backgroundColor: color }} className="w-12 h-8 rounded-md" />
+                                    {/* <div>
+                                        <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">
+                                            Nhãn
+                                        </p>
+
+                                        <div className="flex flex-wrap gap-2">
+
+                                            {selectedTask?.labels?.map((color, idx) => (
+                                                <div
+                                                    key={idx}
+                                                    onClick={() => removeLabel(color)}
+                                                    className="w-12 h-6 rounded-md cursor-pointer hover:brightness-110 flex items-center justify-center"
+                                                    style={{ backgroundColor: color }}
+                                                >
+                                                    <span className="material-symbols-outlined text-white text-[14px] opacity-0 hover:opacity-100">
+                                                        close
+                                                    </span>
+                                                </div>
                                             ))}
-                                            <button className="w-8 h-8 rounded-md bg-slate-200 dark:bg-slate-800 flex items-center justify-center text-slate-600 hover:bg-slate-300">
-                                                <span className="material-symbols-outlined text-[18px]">add</span>
+
+                                            <button
+                                                onClick={() => setOpenLabel(!openLabel)}
+                                                className="w-7 h-7 flex items-center justify-center rounded-md bg-slate-200 hover:bg-slate-300"
+                                            >
+                                                <span className="material-symbols-outlined text-[18px]">
+                                                    add
+                                                </span>
                                             </button>
+
                                         </div>
                                     </div>
+                                    {openLabel && (
+                                        <div className="absolute mt-2 bg-white shadow-lg rounded-lg p-3 w-56 z-50">
 
+                                            <p className="text-sm font-semibold mb-2">Chọn nhãn</p>
+
+                                            <div className="grid grid-cols-4 gap-2">
+
+                                                {labelColors.map((color) => (
+                                                    <div
+                                                        key={color}
+                                                        onClick={() => addLabelToTask(color)}
+                                                        className="h-8 rounded cursor-pointer hover:scale-105"
+                                                        style={{ backgroundColor: color }}
+                                                    />
+                                                ))}
+
+                                            </div>
+                                        </div>
+                                    )} */}
                                     {/* Deadline */}
                                     <div>
                                         <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">Hạn chót</p>
@@ -835,8 +428,17 @@ const TaskBoard = () => {
                                     <button className="flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-4 py-2 rounded-lg text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 transition-colors shadow-sm">
                                         <span className="material-symbols-outlined text-[18px]">schedule</span> Ngày
                                     </button>
-                                    <button className="flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-4 py-2 rounded-lg text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 transition-colors shadow-sm">
+                                    <button
+                                        onClick={() => setShowChecklistSection(prev => !prev)}
+                                        className={`flex items-center gap-2 border px-4 py-2 rounded-lg text-xs font-bold transition-colors shadow-sm ${showChecklistSection
+                                            ? 'bg-primary/10 border-primary text-primary hover:bg-primary/20'
+                                            : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50'
+                                            }`}
+                                    >
                                         <span className="material-symbols-outlined text-[18px]">checklist_rtl</span> Việc cần làm
+                                        {selectedTask.subTasks && selectedTask.subTasks.length > 0 && (
+                                            <span className="bg-primary/20 text-primary px-1.5 py-0.5 rounded text-[10px]">{selectedTask.subTasks.length}</span>
+                                        )}
                                     </button>
                                     <button className="flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-4 py-2 rounded-lg text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 transition-colors shadow-sm">
                                         <span className="material-symbols-outlined text-[18px]">person_add</span> Thành viên
@@ -863,167 +465,27 @@ const TaskBoard = () => {
                                         )}
                                     </div>
 
-                                    {isEditingDescription ? (
-                                        <div className="ml-10 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
-                                            <div className="bg-white dark:bg-slate-950 border-2 border-primary rounded-lg overflow-hidden flex flex-col shadow-lg shadow-primary/5">
-                                                {/* Editor Toolbar */}
-                                                <div className="flex items-center flex-wrap gap-1 p-2 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
-                                                    <button
-                                                        onClick={insertHeading}
-                                                        className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-800 rounded flex items-center gap-1 text-[11px] font-bold text-slate-600 dark:text-slate-400"
-                                                        title="Heading"
-                                                    >
-                                                        Tt <span className="material-symbols-outlined text-[14px]">expand_more</span>
-                                                    </button>
-
-                                                    <div className="w-[1px] h-4 bg-slate-200 dark:bg-slate-800 mx-1" />
-
-                                                    <button
-                                                        onClick={() => insertFormatting('bold')}
-                                                        className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-800 rounded text-slate-600 dark:text-slate-400"
-                                                        title="Bold"
-                                                    >
-                                                        <span className="material-symbols-outlined text-[18px] font-bold">format_bold</span>
-                                                    </button>
-                                                    <button
-                                                        onClick={() => insertFormatting('italic')}
-                                                        className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-800 rounded text-slate-600 dark:text-slate-400"
-                                                        title="Italic"
-                                                    >
-                                                        <span className="material-symbols-outlined text-[18px]">format_italic</span>
-                                                    </button>
-                                                    <button
-                                                        onClick={() => insertFormatting('underline')}
-                                                        className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-800 rounded text-slate-600 dark:text-slate-400"
-                                                        title="Underline"
-                                                    >
-                                                        <span className="material-symbols-outlined text-[18px]">format_underlined</span>
-                                                    </button>
-                                                    <button
-                                                        onClick={() => insertFormatting('strikeThrough')}
-                                                        className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-800 rounded text-slate-600 dark:text-slate-400"
-                                                        title="Strikethrough"
-                                                    >
-                                                        <span className="material-symbols-outlined text-[18px]">strikethrough_s</span>
-                                                    </button>
-
-                                                    <div className="w-[1px] h-4 bg-slate-200 dark:bg-slate-800 mx-1" />
-
-                                                    <button
-                                                        onClick={() => insertFormatting('justifyLeft')}
-                                                        className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-800 rounded text-slate-600 dark:text-slate-400"
-                                                        title="Align Left"
-                                                    >
-                                                        <span className="material-symbols-outlined text-[18px]">format_align_left</span>
-                                                    </button>
-                                                    <button
-                                                        onClick={() => insertFormatting('justifyCenter')}
-                                                        className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-800 rounded text-slate-600 dark:text-slate-400"
-                                                        title="Align Center"
-                                                    >
-                                                        <span className="material-symbols-outlined text-[18px]">format_align_center</span>
-                                                    </button>
-                                                    <button
-                                                        onClick={() => insertFormatting('justifyRight')}
-                                                        className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-800 rounded text-slate-600 dark:text-slate-400"
-                                                        title="Align Right"
-                                                    >
-                                                        <span className="material-symbols-outlined text-[18px]">format_align_right</span>
-                                                    </button>
-
-                                                    <div className="w-[1px] h-4 bg-slate-200 dark:bg-slate-800 mx-1" />
-
-                                                    <button
-                                                        onClick={insertList}
-                                                        className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-800 rounded text-slate-600 dark:text-slate-400"
-                                                        title="Bulleted List"
-                                                    >
-                                                        <span className="material-symbols-outlined text-[18px]">format_list_bulleted</span>
-                                                    </button>
-                                                    <button
-                                                        onClick={() => insertFormatting('insertOrderedList')}
-                                                        className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-800 rounded text-slate-600 dark:text-slate-400"
-                                                        title="Numbered List"
-                                                    >
-                                                        <span className="material-symbols-outlined text-[18px]">format_list_numbered</span>
-                                                    </button>
-
-                                                    <div className="w-[1px] h-4 bg-slate-200 dark:bg-slate-800 mx-1" />
-
-                                                    <button
-                                                        onClick={() => insertFormatting('removeFormat')}
-                                                        className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-800 rounded text-slate-600 dark:text-slate-400"
-                                                        title="Clear Formatting"
-                                                    >
-                                                        <span className="material-symbols-outlined text-[18px]">format_clear</span>
-                                                    </button>
-
-                                                    <div className="flex-1" />
-                                                    <div className="w-[1px] h-4 bg-slate-200 dark:bg-slate-800 mx-1" />
-                                                    <button className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-800 rounded text-slate-600 dark:text-slate-400">
-                                                        <span className="material-symbols-outlined text-[18px]">attach_file</span>
-                                                    </button>
-                                                    <button className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-800 rounded text-slate-600 dark:text-slate-400">
-                                                        <span className="material-symbols-outlined text-[18px]">help</span>
-                                                    </button>
-                                                </div>
-                                                <div
-                                                    ref={descriptionRef}
-                                                    contentEditable={true}
-                                                    autoFocus
-                                                    onInput={(e) => setTempDescription(e.currentTarget.innerHTML)}
-                                                    onFocus={(e) => {
-                                                        // Move cursor to end on focus
-                                                        const range = document.createRange();
-                                                        const sel = window.getSelection();
-                                                        range.selectNodeContents(e.currentTarget);
-                                                        range.collapse(false);
-                                                        if (sel) {
-                                                            sel.removeAllRanges();
-                                                            sel.addRange(range);
-                                                        }
-                                                    }}
-                                                    dangerouslySetInnerHTML={{ __html: tempDescription || '' }}
-                                                    className="w-full min-h-[150px] p-4 bg-transparent outline-none text-sm text-slate-800 dark:text-slate-200 font-medium leading-relaxed prose prose-sm dark:prose-invert max-w-none focus:ring-0"
-                                                />
-                                            </div>
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-3">
-                                                    <button
-                                                        onClick={() => {
-                                                            const content = descriptionRef.current?.innerHTML || '';
-                                                            updateTask(selectedTask.id, { description: content });
-                                                            setIsEditingDescription(false);
-                                                        }}
-                                                        className="bg-primary text-white text-xs font-bold px-4 py-2 rounded shadow-md shadow-primary/20 hover:bg-primary/90 transition-all active:scale-95"
-                                                    >
-                                                        Lưu
-                                                    </button>
-                                                    <button
-                                                        onClick={() => setIsEditingDescription(false)}
-                                                        className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white text-xs font-bold transition-colors px-2"
-                                                    >
-                                                        Hủy
-                                                    </button>
-                                                </div>
-                                                <button className="bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 px-3 py-1.5 rounded text-[10px] font-bold text-slate-600 dark:text-slate-400 transition-colors">
-                                                    Trợ giúp định dạng
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <div
-                                            onClick={handleEditDescription}
-                                            className={`ml-10 p-3 rounded-lg text-sm transition-all cursor-pointer min-h-[50px] prose prose-sm dark:prose-invert max-w-none
-                                                ${selectedTask.description
-                                                    ? 'hover:bg-slate-100 dark:hover:bg-slate-800'
-                                                    : 'bg-slate-200/50 dark:bg-slate-800/50 hover:bg-slate-200 dark:hover:bg-slate-800 italic text-slate-400'}`}
-                                            dangerouslySetInnerHTML={{ __html: selectedTask.description || 'Thêm mô tả chi tiết hơn...' }}
+                                    <div className="ml-10">
+                                        <RichTextEditor
+                                            value={tempDescription}
+                                            onChange={setTempDescription}
+                                            editing={isEditingDescription}
+                                            onEditClick={handleEditDescription}
+                                            onSave={() => {
+                                                updateTask(selectedTask.id, { description: tempDescription });
+                                                setIsEditingDescription(false);
+                                            }}
+                                            onCancel={() => setIsEditingDescription(false)}
+                                            placeholder="Thêm mô tả chi tiết hơn..."
+                                            minHeight="150px"
+                                            saveLabel="Lưu"
+                                            cancelLabel="Hủy"
                                         />
-                                    )}
+                                    </div>
                                 </div>
 
                                 {/* Checklist */}
+                                {showChecklistSection && (
                                 <div className="space-y-4">
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-3">
@@ -1141,6 +603,7 @@ const TaskBoard = () => {
                                         )}
                                     </div>
                                 </div>
+                                )}
                             </div>
 
                             {/* Right Content - Activity */}
@@ -1255,6 +718,17 @@ const TaskBoard = () => {
                                                                 : 'border-slate-100 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
                                                                 }`}
                                                         >
+                                                            {task.labels && task.labels.length > 0 && (
+                                                                <div className="flex gap-1 flex-wrap">
+                                                                    {task.labels.map((color, idx) => (
+                                                                        <div
+                                                                            key={idx}
+                                                                            className="w-10 h-2 rounded-sm"
+                                                                            style={{ backgroundColor: color }}
+                                                                        />
+                                                                    ))}
+                                                                </div>
+                                                            )}
                                                             <div className="flex justify-between items-start mb-2 group-actions">
                                                                 <p className="text-sm font-medium text-slate-700 dark:text-slate-300 flex-1">{task.content}</p>
                                                                 <button

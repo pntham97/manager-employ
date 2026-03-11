@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { authApi } from "../api/auth.api";
 import Cookies from "js-cookie";
 import { useEffect } from "react";
+import { toast } from "react-toastify";
 
 const ChangePasswordPage = () => {
     const navigate = useNavigate();
@@ -62,7 +63,7 @@ const ChangePasswordPage = () => {
             // 🔥 Lưu newPassword tạm thời (KHÔNG gửi lên server lúc này)
             sessionStorage.setItem("newPassword", newPassword);
 
-            alert("OTP đã được gửi về email 📩");
+            toast.success("OTP đã được gửi về email 📩");
             Cookies.set("newPassword", newPassword || "", {
                 expires: 1,      // 1 ngày
                 secure: true,    // chỉ gửi qua https
@@ -72,7 +73,7 @@ const ChangePasswordPage = () => {
 
 
         } catch (error: any) {
-            alert(error?.response?.data?.message || "Gửi OTP thất bại");
+            toast.error(error?.response?.data?.message || "Gửi OTP thất bại");
         }
     };
 
@@ -90,10 +91,10 @@ const ChangePasswordPage = () => {
             setNewPassword("");
             setOldPassword("");
             Cookies.remove("newPassword");
-            alert("Đổi mật khẩu thành công 🎉");
+            toast.success("Đổi mật khẩu thành công 🎉");
 
         } catch (error: any) {
-            alert(error?.response?.data?.message || "OTP không hợp lệ");
+            toast.error(error?.response?.data?.message || "OTP không hợp lệ");
         }
     };
 

@@ -6,6 +6,7 @@ import { User, LogOut, Key, X } from "lucide-react";
 import { authApi } from "../api/auth.api";
 import { message } from "antd";
 import { tokenService } from "../utils/token";
+import { toast } from "react-toastify";
 
 const SidebarLeft: React.FC = () => {
     const location = useLocation();
@@ -103,7 +104,7 @@ const SidebarLeft: React.FC = () => {
     const handleChangePassword = (e: React.FormEvent) => {
         e.preventDefault();
         if (validateForm()) {
-            alert("Đổi mật khẩu thành công 🎉");
+            toast.success("Đổi mật khẩu thành công 🎉");
             setShowPasswordModal(false);
             setOldPassword("");
             setNewPassword("");
@@ -395,7 +396,7 @@ const SidebarLeft: React.FC = () => {
                             className="space-y-4"
                             onSubmit={(e) => {
                                 e.preventDefault();
-                                alert("Cập nhật thông tin thành công 🎉");
+                                toast.success("Cập nhật thông tin thành công 🎉");
                                 setShowProfileModal(false);
                             }}
                         >

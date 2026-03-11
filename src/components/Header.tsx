@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Moon, Sun, User, LogOut, Key, X } from "lucide-react";
+import { toast } from "react-toastify";
 
 const Header: React.FC = () => {
     const [darkMode, setDarkMode] = useState(false);
@@ -52,7 +53,7 @@ const Header: React.FC = () => {
     const handleChangePassword = (e: React.FormEvent) => {
         e.preventDefault();
         if (validateForm()) {
-            alert("Đổi mật khẩu thành công 🎉");
+            toast.success("Đổi mật khẩu thành công 🎉");
             setShowPasswordModal(false);
             setOldPassword("");
             setNewPassword("");
@@ -110,7 +111,7 @@ const Header: React.FC = () => {
                                     <Key className="w-4 h-4" /> Đổi mật khẩu
                                 </button>
                                 <button
-                                    onClick={() => alert("Đăng xuất")}
+                                    onClick={() => toast.info("Đăng xuất")}
                                     className="flex items-center gap-2 w-full text-left px-4 py-2 text-red-600 hover:bg-gray-100"
                                 >
                                     <LogOut className="w-4 h-4" /> Logout
@@ -135,7 +136,7 @@ const Header: React.FC = () => {
                             className="space-y-4"
                             onSubmit={(e) => {
                                 e.preventDefault();
-                                alert("Cập nhật thông tin thành công 🎉");
+                                toast.success("Cập nhật thông tin thành công 🎉");
                                 setShowProfileModal(false);
                             }}
                         >

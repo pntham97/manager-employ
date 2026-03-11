@@ -398,7 +398,7 @@ const ScheduleManagement = () => {
 
     const openRegisterModalForDay = async (day: number, scheduleInfo: any[]) => {
         if (selectedShiftTypeId === null) {
-            window.alert("Vui lòng chọn loại ca ở phía trên trước khi đăng ký ca.");
+            toast.warning("Vui lòng chọn loại ca ở phía trên trước khi đăng ký ca.");
             return;
         }
 
@@ -409,21 +409,21 @@ const ScheduleManagement = () => {
 
         if (isAdmin) {
             if (!selectedSupplierId) {
-                window.alert("Vui lòng chọn Supplier trước khi đăng ký ca.");
+                toast.warning("Vui lòng chọn Supplier trước khi đăng ký ca.");
                 return;
             }
             supplierIdForApi = selectedSupplierId;
         } else {
             const employeeStr = localStorage.getItem("employee");
             if (!employeeStr) {
-                window.alert("Không tìm thấy thông tin employee.");
+                toast.error("Không tìm thấy thông tin employee.");
                 return;
             }
             supplierIdForApi = JSON.parse(employeeStr)?.supplierId;
         }
 
         if (!supplierIdForApi) {
-            window.alert("Không xác định được supplierId.");
+            toast.error("Không xác định được supplierId.");
             return;
         }
 
@@ -469,7 +469,7 @@ const ScheduleManagement = () => {
             });
 
             if (availableDetails.length === 0) {
-                window.alert("Không tìm thấy ca chi tiết khả dụng.");
+                toast.warning("Không tìm thấy ca chi tiết khả dụng.");
                 return;
             }
 
@@ -512,7 +512,7 @@ const ScheduleManagement = () => {
 
         } catch (err) {
             console.error(err);
-            window.alert("Không thể tải danh sách nhân viên.");
+            toast.error("Không thể tải danh sách nhân viên.");
         }
     };
 
@@ -602,7 +602,7 @@ const ScheduleManagement = () => {
 
         if (isAdmin) {
             if (!selectedSupplierId) {
-                window.alert("Vui lòng chọn supplier trước khi xem danh sách nhân viên.");
+                toast.warning("Vui lòng chọn supplier trước khi xem danh sách nhân viên.");
                 return;
             }
             supplierIdForApi = selectedSupplierId;
@@ -672,7 +672,7 @@ const ScheduleManagement = () => {
 
         } catch (error: any) {
             console.error("Lỗi load employee list:", error);
-            window.alert("Không thể tải danh sách nhân viên.");
+            toast.error("Không thể tải danh sách nhân viên.");
         } finally {
             setLoadingEmployees(false);
         }
@@ -687,7 +687,7 @@ const ScheduleManagement = () => {
         const selectedEmployee = availableEmployees.find(emp => emp.id === newEmployeeId);
 
         if (!selectedEmployee) {
-            window.alert("Vui lòng chọn nhân viên cần đăng ký ca.");
+            toast.warning("Vui lòng chọn nhân viên cần đăng ký ca.");
             return;
         }
 
@@ -695,7 +695,7 @@ const ScheduleManagement = () => {
         const employeeName = selectedEmployee.name;
 
         if (!employeeIdNum || employeeIdNum <= 0) {
-            window.alert("ID nhân viên không hợp lệ.");
+            toast.error("ID nhân viên không hợp lệ.");
             return;
         }
 
@@ -703,27 +703,27 @@ const ScheduleManagement = () => {
         let supplierIdForApi: number | undefined = undefined;
         if (isAdmin) {
             if (!selectedSupplierId) {
-                window.alert("Vui lòng chọn supplier trước khi đăng ký ca cho nhân viên.");
+                toast.warning("Vui lòng chọn supplier trước khi đăng ký ca cho nhân viên.");
                 return;
             }
             supplierIdForApi = selectedSupplierId;
         } else {
             const employeeStr = localStorage.getItem("employee");
             if (!employeeStr) {
-                window.alert("Không tìm thấy thông tin employee trong localStorage.");
+                toast.error("Không tìm thấy thông tin employee trong localStorage.");
                 return;
             }
             try {
                 const employee = JSON.parse(employeeStr);
                 supplierIdForApi = employee?.supplierId;
             } catch {
-                window.alert("Lỗi đọc thông tin employee từ localStorage.");
+                toast.error("Lỗi đọc thông tin employee từ localStorage.");
                 return;
             }
         }
 
         if (!supplierIdForApi) {
-            window.alert("Không xác định được supplierId để đăng ký ca.");
+            toast.error("Không xác định được supplierId để đăng ký ca.");
             return;
         }
 
@@ -799,12 +799,12 @@ const ScheduleManagement = () => {
             });
 
             // Hiển thị thông báo thành công
-            window.alert(`✅ Đăng ký ca "${employeeListModal.detailShiftTypeName}" cho nhân viên "${employeeName}" thành công!`);
+            toast.success(`Đăng ký ca "${employeeListModal.detailShiftTypeName}" cho nhân viên "${employeeName}" thành công!`);
 
         } catch (error: any) {
             console.error("❌ Lỗi khi đăng ký ca từ màn quản lý:", error?.response?.data || error?.message);
             const msg = error?.response?.data?.message || error?.message || "Đã xảy ra lỗi khi đăng ký ca.";
-            window.alert(`❌ ${msg}\n\nNhân viên: ${employeeName} (ID: ${employeeIdNum})`);
+            toast.error(`${msg} - Nhân viên: ${employeeName} (ID: ${employeeIdNum})`);
         } finally {
             setPendingCreateEmployee(false);
         }
@@ -846,7 +846,7 @@ const ScheduleManagement = () => {
             });
 
             if (!target?.id) {
-                window.alert("Không tìm thấy bản ghi ca làm để xóa cho nhân viên này.");
+                toast.error("Không tìm thấy bản ghi ca làm để xóa cho nhân viên này.");
                 return;
             }
 
@@ -880,13 +880,13 @@ const ScheduleManagement = () => {
             }));
         } catch (error: any) {
             console.error("Lỗi khi xóa ca:", error?.response?.data || error?.message);
-            window.alert("Đã xảy ra lỗi khi xóa ca. Vui lòng thử lại.");
+            toast.error("Đã xảy ra lỗi khi xóa ca. Vui lòng thử lại.");
         }
     };
     // Hàm xử lý submit form độ lệch thời gian
     const handleSubmitTimeDeviation = async () => {
         if (!timeDeviationModal.scheduleId) {
-            window.alert("Không tìm thấy schedule ID.");
+            toast.error("Không tìm thấy schedule ID.");
             return;
         }
 
@@ -896,7 +896,7 @@ const ScheduleManagement = () => {
                 : parseInt(timeDeviationForm.timeDeviation, 10);
 
             if (timeDeviationValue !== undefined && isNaN(timeDeviationValue)) {
-                window.alert("Số phút lệch giờ phải là một số nguyên.");
+                toast.error("Số phút lệch giờ phải là một số nguyên.");
                 return;
             }
 
@@ -980,11 +980,11 @@ const ScheduleManagement = () => {
                 reason: "",
             });
 
-            window.alert("Cập nhật độ lệch giờ thành công!");
+            toast.success("Cập nhật độ lệch giờ thành công!");
         } catch (error: any) {
             console.error("Lỗi khi cập nhật độ lệch giờ:", error?.response?.data || error?.message);
             const errorMessage = error?.response?.data?.message || "Đã xảy ra lỗi khi cập nhật độ lệch giờ. Vui lòng thử lại.";
-            window.alert(errorMessage);
+            toast.error(errorMessage);
         }
     };
 
@@ -2256,7 +2256,7 @@ const ScheduleManagement = () => {
                                     }
 
                                     if (!supplierIdForApi) {
-                                        window.alert("Không xác định được supplierId.");
+                                        toast.error("Không xác định được supplierId.");
                                         return;
                                     }
 
@@ -2276,10 +2276,10 @@ const ScheduleManagement = () => {
                                         await scheduleApi.create(payload);
                                         console.log("Đăng ký ca thành công:", payload);
                                         await loadScheduleData();
-                                        window.alert("Đăng ký ca thành công.");
+                                        toast.success("Đăng ký ca thành công.");
                                         setRegisterModal({ ...registerModal, show: false });
                                     } catch (err: any) {
-                                        window.alert(err?.response?.data?.message || "Lỗi đăng ký ca.");
+                                        toast.error(err?.response?.data?.message || "Lỗi đăng ký ca.");
                                     }
                                 }}
                             >

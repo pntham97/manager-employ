@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { employsApi } from "../api/employs.api";
 import { employeeApi, type TypeWork, type Company } from "../api/employee.api";
 import { useNavigate, Link } from "react-router-dom";
+import { toast } from "react-toastify";
 
 interface Role {
     id: string;
@@ -321,11 +322,11 @@ const AddEmploys = () => {
             setSubmitting(true);
             const res = await employsApi.postEmploys(payload);
             console.log("Tạo nhân viên thành công:", res.data);
-            alert("Tạo nhân viên thành công!");
+            toast.success("Tạo nhân viên thành công!");
             navigate("/manager-employ");
         } catch (error: any) {
             console.error("Lỗi tạo nhân viên:", error);
-            alert(error.response?.data?.message || "Có lỗi xảy ra khi tạo nhân viên");
+            toast.error(error.response?.data?.message || "Có lỗi xảy ra khi tạo nhân viên");
         } finally {
             setSubmitting(false);
         }

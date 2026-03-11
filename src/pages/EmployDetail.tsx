@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useLocation, useNavigate, Link } from "react-router-dom";
 import { employeeApi, type EmployeeResponse, type UpdateEmployeeRequest, type TypeWork, type Company } from "../api/employee.api";
+import { toast } from "react-toastify";
 import { Document, Packer, Paragraph, HeadingLevel, AlignmentType, Table, TableRow, TableCell, WidthType } from "docx";
 import jsPDF from "jspdf";
 // Import fonts as side effects (they auto-register with jsPDF)
@@ -246,17 +247,17 @@ const EmployDetail = () => {
             );
 
             if (response.data) {
-                navigate("/EmployDetail", {
+                navigate("/manager-employ", {
                     state: { employee: response.data },
                     replace: true
                 });
 
                 setIsEditing(false);
-                alert("Cập nhật thông tin nhân viên thành công!");
+                toast.success("Cập nhật thông tin nhân viên thành công!");
             }
         } catch (error: any) {
             console.error("Failed to update employee", error);
-            alert(
+            toast.error(
                 error.response?.data?.message ||
                 "Có lỗi xảy ra khi cập nhật thông tin nhân viên"
             );
@@ -298,12 +299,12 @@ const EmployDetail = () => {
 
         // validate
         if (!file.type.startsWith("image/")) {
-            alert("Chỉ được upload ảnh");
+            toast.error("Chỉ được upload ảnh");
             return;
         }
 
         if (file.size > 5 * 1024 * 1024) {
-            alert("Ảnh tối đa 5MB");
+            toast.error("Ảnh tối đa 5MB");
             return;
         }
 
@@ -317,7 +318,7 @@ const EmployDetail = () => {
             const url = await uploadAvatarToCloudinary(file);
             setAvatarUrl(url); // 👈 URL cloudinary
         } catch (err) {
-            alert("Upload ảnh thất bại");
+            toast.error("Upload ảnh thất bại");
             setAvatarPreview(null);
         } finally {
             setUploading(false);
@@ -326,7 +327,7 @@ const EmployDetail = () => {
     // Xử lý xuất Word
     const handleExportWord = async () => {
         if (!employee) {
-            alert("Không có dữ liệu nhân viên để xuất");
+            toast.error("Không có dữ liệu nhân viên để xuất");
             return;
         }
 
@@ -530,10 +531,10 @@ const EmployDetail = () => {
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
 
-            alert("Xuất file Word thành công!");
+            toast.success("Xuất file Word thành công!");
         } catch (error) {
             console.error("Lỗi khi xuất Word:", error);
-            alert("Có lỗi xảy ra khi xuất file Word. Vui lòng thử lại.");
+            toast.error("Có lỗi xảy ra khi xuất file Word. Vui lòng thử lại.");
         }
     };
 
@@ -1063,7 +1064,7 @@ const EmployDetail = () => {
     // };
     const handleExportPDF = async () => {
         if (!employee) {
-            alert("Không có dữ liệu nhân viên để xuất");
+            toast.error("Không có dữ liệu nhân viên để xuất");
             return;
         }
 
@@ -1402,10 +1403,10 @@ const EmployDetail = () => {
             const fileName = `Ho_so_${employee.name?.replace(/\s+/g, "_") || "nhan_vien"}.pdf`;
             pdf.save(fileName);
 
-            alert("Xuất file PDF thành công!");
+            toast.success("Xuất file PDF thành công!");
         } catch (error) {
             console.error("Lỗi khi xuất PDF:", error);
-            alert("Có lỗi xảy ra khi xuất file PDF. Vui lòng thử lại.");
+            toast.error("Có lỗi xảy ra khi xuất file PDF. Vui lòng thử lại.");
         }
     };
     // Tính thâm niên từ ngày gia nhập

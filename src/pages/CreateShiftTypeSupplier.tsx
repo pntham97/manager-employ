@@ -4,6 +4,7 @@ import type { CreateShiftTypeSupplierRequest } from "../api/shiftTypeSupplier.ap
 import { shiftTypeApi } from "../api/shiftType.api";
 import { employeeApi } from "../api/employee.api";
 import { useNavigate, Link, useLocation } from "react-router-dom";
+import { toast } from "react-toastify";
 
 interface Supplier {
     id: number;
@@ -302,12 +303,12 @@ const CreateShiftTypeSupplier = () => {
                         const employee = JSON.parse(employeeStr);
                         finalSupplierId = employee?.supplierId;
                         if (!finalSupplierId) {
-                            alert("Không tìm thấy thông tin văn phòng. Vui lòng liên hệ quản trị viên.");
+                            toast.error("Không tìm thấy thông tin văn phòng. Vui lòng liên hệ quản trị viên.");
                             return;
                         }
                     }
                 } catch (error) {
-                    alert("Không tìm thấy thông tin văn phòng. Vui lòng liên hệ quản trị viên.");
+                    toast.error("Không tìm thấy thông tin văn phòng. Vui lòng liên hệ quản trị viên.");
                     return;
                 }
             }
@@ -322,12 +323,12 @@ const CreateShiftTypeSupplier = () => {
 
             const res = await shiftTypeSupplierApi.create(payload);
             console.log("Tạo shift type supplier thành công:", res.data);
-            alert("Tạo thời gian đăng ký loại ca thành công!");
+            toast.success("Tạo thời gian đăng ký loại ca thành công!");
             navigate("/ScheduleManagement");
         } catch (error: any) {
             console.error("Lỗi tạo shift type supplier:", error);
             const errorMessage = error.response?.data?.message || error.message || "Có lỗi xảy ra khi tạo thời gian đăng ký loại ca";
-            alert(errorMessage);
+            toast.error(errorMessage);
         } finally {
             setSubmitting(false);
         }
