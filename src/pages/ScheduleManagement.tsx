@@ -28,6 +28,7 @@ const ScheduleManagement = () => {
     const [scheduleData, setScheduleData] = useState<any[]>([]);
     const [shiftTypeData, setShiftTypeData] = useState<any[]>([]);
     const [suppliers, setSuppliers] = useState<Array<{ id: number; name: string; status: boolean }>>([]);
+    const [positions, setPositions] = useState<Array<{ id: number; name: string }>>([]);
     const [maxDetailShiftCount, setMaxDetailShiftCount] = useState<number>(0);
     const [loading, setLoading] = useState(false);
     const [errorModal, setErrorModal] = useState<{
@@ -35,6 +36,7 @@ const ScheduleManagement = () => {
         message: string;
     }>({ show: false, message: "" });
     const [selectedSupplierId, setSelectedSupplierId] = useState<number | undefined>(undefined);
+    const [selectedPositionId, setSelectedPositionId] = useState<number | undefined>(undefined);
     const [selectedShiftTypeId, setSelectedShiftTypeId] = useState<number | null>(null);
     let [employeeListModal, setEmployeeListModal] = useState<{
         show: boolean;
@@ -201,7 +203,7 @@ const ScheduleManagement = () => {
             }
             // Với MANAGER, không truyền supplierId để API tự động lấy từ token
 
-            const res = await scheduleApi.getAdminManagerSchedule(month, year, supplierIdForApi);
+            const res = await scheduleApi.getAdminManagerSchedule(month, year, supplierIdForApi, selectedPositionId);
             console.log("🔍 [DEBUG] Schedule Data:", res.data);
             const payload = Array.isArray(res.data) ? res.data : res.data?.data;
             setScheduleData(payload ?? []);
@@ -214,7 +216,7 @@ const ScheduleManagement = () => {
         } finally {
             setLoading(false);
         }
-    }, [hasPermission, currentMonth, currentYear, isAdmin, selectedSupplierId]);
+    }, [hasPermission, currentMonth, currentYear, isAdmin, selectedSupplierId, selectedPositionId]);
 
     // Load danh sách shiftType
     const loadShiftTypeData = useCallback(async () => {
@@ -232,6 +234,7 @@ const ScheduleManagement = () => {
             // Với MANAGER, không truyền supplierId để API tự động lấy từ token
 
             const res = await shiftTypeSupplierApi.getByMonthYearAdminManager(month, year, supplierIdForApi);
+            console.log("🔍 [DEBUG] Shift Type Data:", res.data);
             const payload = Array.isArray(res.data) ? res.data : res.data?.data;
             setShiftTypeData(payload ?? []);
         } catch (error: any) {
@@ -239,22 +242,26 @@ const ScheduleManagement = () => {
         }
     }, [hasPermission, currentMonth, currentYear, isAdmin, selectedSupplierId]);
 
-    // Load danh sách suppliers (chỉ cho ADMIN)
+    // Load danh sách positions (và suppliers nếu là ADMIN)
     const loadSuppliers = async () => {
-        if (!hasPermission || !isAdmin) return;
+        if (!hasPermission) return;
         try {
             const res = await employeeApi.getSuppliersPositions();
             const suppliersData = res.data?.suppliers || [];
-            // Chỉ lấy suppliers có status = true
-            setSuppliers(suppliersData.filter((s: any) => s.status === true));
+            const positionsData = res.data?.positions || [];
+            // Chỉ lấy suppliers có status = true (ADMIN mới dùng)
+            if (isAdmin) {
+                setSuppliers(suppliersData.filter((s: any) => s.status === true));
+            }
+            setPositions(positionsData);
         } catch (error: any) {
             console.error("Failed to load suppliers", error);
         }
     };
 
-    // Load suppliers khi component mount (chỉ cho ADMIN)
+    // Load positions (và suppliers nếu ADMIN) khi component mount
     useEffect(() => {
-        if (!hasPermission || !isAdmin) return;
+        if (!hasPermission) return;
         loadSuppliers();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [hasPermission, isAdmin]);
@@ -1283,6 +1290,24 @@ const ScheduleManagement = () => {
                                 </select>
                             </div>
                         )}
+                        <div className="flex items-center gap-2">
+                            <label className="text-sm text-[#616f89] dark:text-[#9ca3af]">Position:</label>
+                            <select
+                                value={selectedPositionId ?? ""}
+                                onChange={(e) => {
+                                    const v = e.target.value;
+                                    setSelectedPositionId(v === "" ? undefined : Number(v));
+                                }}
+                                className="px-3 py-2 border border-[#dbdfe6] dark:border-[#4b5563] rounded-lg bg-white dark:bg-[#111827] text-[#111318] dark:text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 min-w-[180px]"
+                            >
+                                <option value="">Tất cả</option>
+                                {positions.map((p) => (
+                                    <option key={p.id} value={p.id}>
+                                        {p.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
                         <div className="flex items-center rounded-lg border border-[#dbdfe6] dark:border-[#4b5563] overflow-hidden">
                             <button
                                 type="button"
