@@ -35,6 +35,9 @@ export function useTaskBoard(projectId: string | undefined) {
     const [newChecklistItemText, setNewChecklistItemText] = useState('');
     const [tempTitle, setTempTitle] = useState('');
     const [showChecklistSection, setShowChecklistSection] = useState(false);
+    const [showMembersSection, setShowMembersSection] = useState(false);
+    const [showDeadlineSection, setShowDeadlineSection] = useState(false);
+    const [showAttachmentsSection, setShowAttachmentsSection] = useState(false);
 
     const fetchTaskDetail = useCallback(async (taskKey: string | null) => {
         if (!taskKey) return;
@@ -43,21 +46,25 @@ export function useTaskBoard(projectId: string | undefined) {
             const res = await projectApi.getBoardTaskDetail(numericTaskId);
             if (res.data) {
                 const t = res.data;
-                setData(prev => ({
-                    ...prev,
-                    tasks: {
-                        ...prev.tasks,
-                        [taskKey]: {
-                            ...prev.tasks[taskKey],
-                            content: t.title,
-                            description: t.description,
-                            deadline: t.deadline,
-                            assignments: t.listAssignmentEmployee,
-                            progress: t.progress ?? 0,
-                            subTasks: t.subTasks ?? []
+                setData(prev => {
+                    const existing = prev.tasks[taskKey] || {};
+                    return {
+                        ...prev,
+                        tasks: {
+                            ...prev.tasks,
+                            [taskKey]: {
+                                ...existing,
+                                content: t.title,
+                                description: t.description,
+                                deadline: t.deadline,
+                                assignments: t.listAssignmentEmployee,
+                                progress: t.progress ?? 0,
+                                subTasks: t.subTasks ?? [],
+                                attachments: existing.attachments
+                            }
                         }
-                    }
-                }));
+                    };
+                });
             }
         } catch (err) {
             console.error("Failed to fetch task detail", err);
@@ -81,6 +88,42 @@ export function useTaskBoard(projectId: string | undefined) {
             }
         } else {
             setShowChecklistSection(false);
+        }
+    }, [selectedTaskId, data.tasks]);
+
+    // Auto-show members section when task has assignments
+    useEffect(() => {
+        if (selectedTaskId && data.tasks[selectedTaskId]) {
+            const assignCount = data.tasks[selectedTaskId].assignments?.length ?? 0;
+            if (assignCount > 0) {
+                setShowMembersSection(true);
+            }
+        } else {
+            setShowMembersSection(false);
+        }
+    }, [selectedTaskId, data.tasks]);
+
+    // Auto-show deadline section when task has deadline
+    useEffect(() => {
+        if (selectedTaskId && data.tasks[selectedTaskId]) {
+            const hasDeadline = !!data.tasks[selectedTaskId].deadline;
+            if (hasDeadline) {
+                setShowDeadlineSection(true);
+            }
+        } else {
+            setShowDeadlineSection(false);
+        }
+    }, [selectedTaskId, data.tasks]);
+
+    // Auto-show attachments section when task has attachments
+    useEffect(() => {
+        if (selectedTaskId && data.tasks[selectedTaskId]) {
+            const attachCount = data.tasks[selectedTaskId].attachments?.length ?? 0;
+            if (attachCount > 0) {
+                setShowAttachmentsSection(true);
+            }
+        } else {
+            setShowAttachmentsSection(false);
         }
     }, [selectedTaskId, data.tasks]);
 
@@ -556,6 +599,12 @@ export function useTaskBoard(projectId: string | undefined) {
         setNewChecklistItemText,
         showChecklistSection,
         setShowChecklistSection,
+        showMembersSection,
+        setShowMembersSection,
+        showDeadlineSection,
+        setShowDeadlineSection,
+        showAttachmentsSection,
+        setShowAttachmentsSection,
 
         // Actions
         fetchTaskDetail,
