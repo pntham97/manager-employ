@@ -7,6 +7,14 @@ export interface Activity {
     timestamp: string;
 }
 
+export interface TaskAttachment {
+    id: string;
+    name: string;
+    type: string; // e.g. "CSV", "PDF", "DOC"
+    url: string;
+    addedAt: string; // ISO date
+}
+
 export interface Task {
     id: string;
     content: string;
@@ -19,6 +27,7 @@ export interface Task {
     category?: string;
     deadline?: string;
     assignments?: TaskAssignment[];
+    attachments?: TaskAttachment[];
 }
 
 export interface ColumnData {
