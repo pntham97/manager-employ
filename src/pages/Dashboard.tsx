@@ -1,7 +1,10 @@
-import React, { useState } from "react";
-import { Table } from "antd";
-import { Search, Bell, Ellipsis, Plus, Tag } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from "react";
+import { Table, Select } from "antd";
+import { Search, Bell, Ellipsis, Plus, Pencil, Check } from 'lucide-react';
 import type { ColumnsType } from "antd/es/table";
+import { dashboardApi, type DashboardSummaryResponse, type ProcessImmediatelyResponse } from "../api/dashboard";
+import { employeeApi, type TypeWork } from "../api/employee.api";
+import { toast } from "react-toastify";
 
 export type EmployeeStatus = "official" | "probation" | "intern";
 
@@ -29,39 +32,13 @@ const activities = [
 export interface Employee {
     id: number;
     name: string;
-    avatar: string;
-    position: string;
-    status: EmployeeStatus;
-    startDate: string;
+    avatarUrl?: string | null;
+    positionId?: number;
+    positionName?: string;
+    typeWorkId?: number;
+    typeWorkName?: string;
+    createdAt?: string;
 }
-
-export const employees: Employee[] = [
-    {
-        id: 1,
-        name: "Trần Thị Mai",
-        avatar: "https://lh3.googleusercontent.com/aida-public/AB6AXuBarVozfrH7Z8aIJTBCow8aQpKbfYkFkR6Ct-98wWh8z9Io1tHj0Z_1TzUp0Np7yaZ1GbstcIEJ5R4fyV_qtuJPUW9ctvlWnrWX4lFhQ1c4WoGzllYXsnG8mbOt-GtFYwYeDd9vays9rU4dv42NGaxh9hmOmjNs9iCGVsSx7cw2axMYrSKuWzHPiMrqSda36wFa61hPTONzD_RA8IpEozH96RlCUOOOZYpNj9QdB47pwHNoTMUUarDD-bgi0qH5C97v3ZYjUfykyS4",
-        position: "UX Designer",
-        status: "official",
-        startDate: "24/10/2023",
-    },
-    {
-        id: 2,
-        name: "Lê Văn Hùng",
-        avatar: "https://lh3.googleusercontent.com/aida-public/AB6AXuBvnyT5_MsvEsSSJqeavLRsR5metXi55mcitYb0kg8Xa70KgTdz3pf_Lr593l5QoLR1WR_UXcrewPDRuCAd_t-X-gJpcyOrhV8i5aDfhrT-cvy0RcZN59oAeHWvAAVarZ2u4fsKCO9bZrT4_J_p4bIl8PI6u1kdjq36yZL1FboZbkST9g-UXME8OMItNNe_9sQxOxOAKkHDVYHVjtBeGeY51kV_c41IHFs_ckev-NcjeX6FVcjmcSpA2xolGBYv6xsb41wCW8YF1rA",
-        position: "Frontend Dev",
-        status: "probation",
-        startDate: "20/10/2023",
-    },
-    {
-        id: 3,
-        name: "Nguyễn Văn A",
-        avatar: "https://lh3.googleusercontent.com/aida-public/AB6AXuCxUhwU9y-Lz-LGAV4luAOio7TyFhwYCjxtj2eUOUvGQ5BUttrV926xWf9IEwUOmZEHGGnMbZG8kFXJXEyjckmC8W9F3_OVAC8CoCQ1nd188NvIGsXBSeL_6AqNfWB8Ywd6ua57i8bqRN6mkOlywa0TH8VKEDWRzWSsyVuVtAU_Egk6lkBHyqGwjWFcPA_15qtLYPvFnL_A-ridfxqR7TPzkUXAfsxsML8hLZgXCrqJad68Y9k7cqWkSuugEnWwQXZx9XH8uwXzmLY",
-        position: "Marketing Intern",
-        status: "intern",
-        startDate: "18/10/2023",
-    },
-];
-
 
 export const statusMap: Record<
     EmployeeStatus,
@@ -83,54 +60,265 @@ export const statusMap: Record<
 const Dashboard: React.FC = () => {
 
     const [activeId, setActiveId] = useState(activities[0].id);
+    const [loadingSummary, setLoadingSummary] = useState(false);
+    const [summary, setSummary] = useState<DashboardSummaryResponse | null>(null);
+    const [processImmediately, setProcessImmediately] = useState<ProcessImmediatelyResponse | null>(null);
+    const [positions, setPositions] = useState<Array<{ id: number; name: string }>>([]);
+    const [typeWorks, setTypeWorks] = useState<TypeWork[]>([]);
+    const [editingEmployeeIds, setEditingEmployeeIds] = useState<Record<number, boolean>>({});
+    const [editableRowIds, setEditableRowIds] = useState<Record<number, boolean>>({});
+    const currentUserName = useMemo(() => {
+        try {
+            const raw = localStorage.getItem("user");
+            if (!raw) return "bạn";
+            const user = JSON.parse(raw);
+            return user?.name || user?.fullName || user?.username || "bạn";
+        } catch {
+            return "bạn";
+        }
+    }, []);
+
+    useEffect(() => {
+        let mounted = true;
+        (async () => {
+            try {
+                setLoadingSummary(true);
+                const res = await dashboardApi.getSummary();
+                console.log(res);
+                if (!mounted) return;
+                const payload = (res as any)?.data?.data ?? (res as any)?.data;
+                setSummary(payload);
+            } catch (e) {
+                console.error("Failed to load dashboard summary", e);
+            } finally {
+                if (mounted) setLoadingSummary(false);
+            }
+        })();
+        return () => {
+            mounted = false;
+        };
+    }, []);
+
+    useEffect(() => {
+        let mounted = true;
+        (async () => {
+            try {
+                const [posRes, twRes] = await Promise.all([
+                    employeeApi.getSuppliersPositions(),
+                    employeeApi.getTypeWorksAndCompanies(),
+                ]);
+                if (!mounted) return;
+                setPositions(posRes.data?.positions ?? []);
+                setTypeWorks(twRes.data?.typeWorks ?? []);
+            } catch (e) {
+                console.error("Failed to load positions/typeWorks", e);
+            }
+        })();
+        return () => {
+            mounted = false;
+        };
+    }, []);
+    useEffect(() => {
+        let mounted = true;
+        (async () => {
+            try {
+                setLoadingSummary(true);
+                const res = await dashboardApi.getProcessImmediately();
+                console.log(res);
+                console.log("processImmediately", res);
+                if (!mounted) return;
+                const payload = (res as any)?.data?.data ?? (res as any)?.data;
+                setProcessImmediately(payload);
+            } catch (e) {
+                console.error("Failed to load dashboard process immediately", e);
+            } finally {
+                if (mounted) setLoadingSummary(false);
+            }
+        })();
+        return () => {
+            mounted = false;
+        };
+    }, []);
+    const recentEmployees: Employee[] = useMemo(() => {
+        const list = summary?.recentEmployees ?? [];
+        return list.map((e) => ({
+            id: e.employeeId,
+            name: e.name,
+            avatarUrl: e.avatarUrl,
+            positionId: e.positionId,
+            positionName: e.position?.name,
+            typeWorkId: e.typeWork?.id,
+            typeWorkName: e.typeWork?.name,
+            createdAt: e.createdAt,
+        }));
+    }, [summary]);
+
+    const updateEmployeeQuick = async (employeeId: number, patch: { positionId?: number; typeWorkId?: number }) => {
+        try {
+            setEditingEmployeeIds(prev => ({ ...prev, [employeeId]: true }));
+            await employeeApi.updateEmployee(employeeId, patch as any);
+            toast.success("Đã cập nhật nhân viên");
+        } catch (e: any) {
+            console.error("Failed to quick update employee", e);
+            toast.error(e?.response?.data?.message || "Không thể cập nhật (cần API hỗ trợ cập nhật nhanh)");
+            throw e;
+        } finally {
+            setEditingEmployeeIds(prev => ({ ...prev, [employeeId]: false }));
+        }
+    };
+
     const columns: ColumnsType<Employee> = [
         {
             title: "Nhân viên",
             dataIndex: "name",
             key: "name",
-            render: (record: any) => (
+            render: (_: unknown, record: Employee) => (
                 <div className="flex items-center gap-3">
                     <img
-                        src={record.avatar}
+                        src={record.avatarUrl || "https://ui-avatars.com/api/?name=" + encodeURIComponent(record.name)}
                         alt={record.name}
                         className="w-9 h-9 rounded-full object-cover"
                     />
-                    <span className="font-medium text-[#111318] dark:text-white">
-                        {record.name}
-                    </span>
+                    <div className="flex flex-col leading-tight">
+                        <span className="font-medium text-[#111318] dark:text-white">
+                            {record.name}
+                        </span>
+
+                    </div>
                 </div>
             ),
         },
         {
             title: "Vị trí",
-            dataIndex: "position",
+            dataIndex: "positionId",
             key: "position",
             className: "text-[#616f89] dark:text-gray-400",
-        },
-        {
-            title: "Trạng thái",
-            dataIndex: "status",
-            key: "status",
-            render: (status: EmployeeStatus) => {
-                const s = statusMap[status];
-                return (
-                    // <div  className={`rounded-full text-${s.color}-500  px-3 py-1 bg-${s.color}-500`}>
-                    //     {s.label}
-                    // </div>
-                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-${s.color}-100 text-${s.color}-700 dark:bg-${s.color}-900/30 dark:text-${s.color}-400`}>
-                        <span className={`w-1.5 h-1.5 rounded-full bg-${s.color}-500`}></span>
-                        {s.label}
+            render: (_: unknown, record: Employee) => (
+                editableRowIds[record.id] ? (
+                    <Select
+                        value={record.positionId}
+                        style={{ width: "100%" }}
+                        size="small"
+                        loading={!!editingEmployeeIds[record.id]}
+                        placeholder="Chọn vị trí"
+                        options={positions.map(p => ({ value: p.id, label: p.name }))}
+                        onChange={async (value) => {
+                            const prev = summary;
+                            setSummary(s => {
+                                if (!s) return s;
+                                return {
+                                    ...s,
+                                    recentEmployees: s.recentEmployees.map(e =>
+                                        e.employeeId === record.id
+                                            ? {
+                                                ...e,
+                                                positionId: value,
+                                                position: { ...(e.position as any), id: value, name: positions.find(p => p.id === value)?.name || "" }
+                                            }
+                                            : e
+                                    )
+                                };
+                            });
+                            try {
+                                await updateEmployeeQuick(record.id, { positionId: value });
+                                setEditableRowIds(prev => ({ ...prev, [record.id]: false }));
+                            } catch {
+                                setSummary(prev);
+                            }
+                        }}
+                    />
+                ) : (
+                    <span className="text-sm text-[#616f89] dark:text-gray-400">
+                        {record.positionName || "-"}
                     </span>
-
-                );
-            }
+                )
+            ),
         },
         {
-            title: "Ngày bắt đầu",
-            dataIndex: "startDate",
-            key: "startDate",
+            title: "Loại việc",
+            dataIndex: "typeWorkId",
+            key: "typeWorkName",
+            className: "text-[#616f89] dark:text-gray-400",
+            render: (_: unknown, record: Employee) => (
+                editableRowIds[record.id] ? (
+                    <Select
+                        value={record.typeWorkId}
+                        style={{ width: "100%" }}
+                        size="small"
+                        loading={!!editingEmployeeIds[record.id]}
+                        placeholder="Chọn loại việc"
+                        options={typeWorks.map(tw => ({ value: tw.id, label: tw.name }))}
+                        onChange={async (value) => {
+                            const prev = summary;
+                            setSummary(s => {
+                                if (!s) return s;
+                                return {
+                                    ...s,
+                                    recentEmployees: s.recentEmployees.map(e =>
+                                        e.employeeId === record.id
+                                            ? {
+                                                ...e,
+                                                typeWork: { ...(e.typeWork as any), id: value, name: typeWorks.find(t => t.id === value)?.name || "" }
+                                            }
+                                            : e
+                                    )
+                                };
+                            });
+                            try {
+                                await updateEmployeeQuick(record.id, { typeWorkId: value });
+                                setEditableRowIds(prev => ({ ...prev, [record.id]: false }));
+                            } catch {
+                                setSummary(prev);
+                            }
+                        }}
+                    />
+                ) : (
+                    <span className="text-sm text-[#616f89] dark:text-gray-400">
+                        {record.typeWorkName || "-"}
+                    </span>
+                )
+            ),
+        },
+        {
+            title: "",
+            key: "actions",
+            align: "right",
+            render: (_: unknown, record: Employee) => (
+                <button
+                    type="button"
+                    onClick={() => setEditableRowIds(prev => ({ ...prev, [record.id]: !prev[record.id] }))}
+                    className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors
+                        ${editableRowIds[record.id]
+                            ? "bg-primary text-white hover:bg-primary/90"
+                            : "bg-primary/10 text-primary hover:bg-primary/15"
+                        }`}
+                >
+                    {editableRowIds[record.id] ? (
+                        <>
+                            <Check size={14} />
+                            Xong
+                        </>
+                    ) : (
+                        <>
+                            <Pencil size={14} />
+                            Chỉnh sửa
+                        </>
+                    )}
+                </button>
+            ),
+        },
+        {
+            title: "Ngày tạo",
+            dataIndex: "createdAt",
+            key: "createdAt",
             align: "right",
             className: "text-[#616f89] dark:text-gray-400",
+            render: (v: string | undefined) => {
+                if (!v) return "";
+                const d = new Date(v);
+                if (isNaN(d.getTime())) return v;
+                return d.toLocaleString("vi-VN");
+            },
         },
     ];
 
@@ -173,7 +361,7 @@ const Dashboard: React.FC = () => {
             <div className="pt-[60px] pb-[40px]">
                 <main className=" px-16 pt-[60px]  space-y-6">
                     <div className="flex flex-col gap-1">
-                        <h3 className="text-xl font-semibold dark:text-white">Chào buổi sáng, Minh! 👋</h3>
+                        <h3 className="text-xl font-semibold dark:text-white">Chào buổi sáng, {currentUserName}! 👋</h3>
                         <p className="text-[#616f89] dark:text-gray-400 text-sm">Dưới đây là tóm tắt hoạt động nhân sự hôm nay.</p>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -184,10 +372,12 @@ const Dashboard: React.FC = () => {
                                 <span className="material-symbols-outlined text-primary bg-primary/10 p-1.5 rounded-lg text-[20px]">groups</span>
                             </div>
                             <div>
-                                <p className="text-[#111318] dark:text-white text-2xl font-bold">124</p>
+                                <p className="text-[#111318] dark:text-white text-2xl font-bold">
+                                    {summary?.totalEmployeesInSupplierHmt ?? 0}
+                                </p>
                                 <p className="text-[#07883b] text-xs font-medium flex items-center gap-1 mt-1">
                                     <span className="material-symbols-outlined text-[14px]">trending_up</span>
-                                    +2% tháng này
+                                    +{summary?.employeeGrowthPercentMoM ?? 0}% tháng này
                                 </p>
                             </div>
                         </div>
@@ -198,9 +388,11 @@ const Dashboard: React.FC = () => {
                                 <span className="material-symbols-outlined text-[#f59e0b] bg-[#f59e0b]/10 p-1.5 rounded-lg text-[20px]">rocket_launch</span>
                             </div>
                             <div>
-                                <p className="text-[#111318] dark:text-white text-2xl font-bold">8</p>
+                                <p className="text-[#111318] dark:text-white text-2xl font-bold">
+                                    {summary?.totalProjectsInProgress ?? 0}
+                                </p>
                                 <p className="text-[#616f89] dark:text-gray-500 text-xs font-medium mt-1">
-                                    2 dự án sắp deadline
+                                    {summary?.totalProjectsInProgressNearDeadline ?? 0} dự án sắp deadline
                                 </p>
                             </div>
                         </div>
@@ -211,7 +403,9 @@ const Dashboard: React.FC = () => {
                                 <span className="material-symbols-outlined text-[#ef4444] bg-[#ef4444]/10 p-1.5 rounded-lg text-[20px]">event_busy</span>
                             </div>
                             <div>
-                                <p className="text-[#111318] dark:text-white text-2xl font-bold">12</p>
+                                <p className="text-[#111318] dark:text-white text-2xl font-bold">
+                                    {summary?.totalHistorySchedulePending ?? 0}
+                                </p>
                                 <p className="text-[#616f89] dark:text-gray-500 text-xs font-medium mt-1">
                                     Cần xử lý trong ngày
                                 </p>
@@ -237,52 +431,60 @@ const Dashboard: React.FC = () => {
                         <div className="w-full">
                             <div className=" rounded-xl   ">
                                 <div className="rounded-xl mb-6 bg-white dark:bg-[#1A202C] border border-[#f0f2f4] dark:border-gray-800 p-6 shadow-sm">
-                                    <div className="flex items-center justify-between mb-6">
+                                    <div className="flex items-center justify-between mb-4">
                                         <div>
-                                            <h3 className="text-[#111318] dark:text-white text-lg font-bold">Hiệu suất dự án</h3>
-                                            <p className="text-[#616f89] dark:text-gray-400 text-sm">Phân bổ khối lượng công việc tháng 10</p>
+                                            <h3 className="text-[#111318] dark:text-white text-lg font-bold">Hiệu suất dự án theo loại</h3>
+                                            <p className="text-[#616f89] dark:text-gray-400 text-sm">
+                                                Dự án trong tháng hiện tại theo từng loại
+                                            </p>
                                         </div>
                                         <button className="p-2 hover:bg-[#f0f2f4] dark:hover:bg-gray-800 rounded-lg">
-                                            <span className="material-symbols-outlined text-[#616f89] dark:text-gray-400"><Ellipsis /></span>
+                                            <span className="material-symbols-outlined text-[#616f89] dark:text-gray-400">
+                                                <Ellipsis />
+                                            </span>
                                         </button>
                                     </div>
-
                                     <div className="w-full h-[240px] flex items-end justify-between gap-4 px-2">
-
-                                        <div className="flex flex-col items-center gap-2 flex-1 group">
-                                            <div className="w-full bg-[#f0f2f4] dark:bg-gray-800 rounded-t-md relative h-[200px] flex items-end overflow-hidden group-hover:bg-[#e2e4e7] dark:group-hover:bg-gray-700 transition-colors">
-                                                <div className="w-full bg-primary transition-all duration-500 bg-blue-600 rounded-t-md h-[65%]" ></div>
-                                            </div>
-                                            <span className="text-xs font-medium text-[#616f89] dark:text-gray-400">Website</span>
-                                        </div>
-
-                                        <div className="flex flex-col items-center gap-2 flex-1 group">
-                                            <div className="w-full bg-[#f0f2f4] dark:bg-gray-800 rounded-t-md relative h-[200px] flex items-end overflow-hidden group-hover:bg-[#e2e4e7] dark:group-hover:bg-gray-700 transition-colors">
-                                                <div className="w-full bg-primary/80 transition-all duration-500 bg-blue-600 rounded-t-md h-[85%]" ></div>
-                                            </div>
-                                            <span className="text-xs font-medium text-[#616f89] dark:text-gray-400">Mobile App</span>
-                                        </div>
-
-                                        <div className="flex flex-col items-center gap-2 flex-1 group">
-                                            <div className="w-full bg-[#f0f2f4] dark:bg-gray-800 rounded-t-md relative h-[200px] flex items-end overflow-hidden group-hover:bg-[#e2e4e7] dark:group-hover:bg-gray-700 transition-colors">
-                                                <div className="w-full bg-primary/60 transition-all duration-500 bg-blue-600 rounded-t-md h-[25%] " ></div>
-                                            </div>
-                                            <span className="text-xs font-medium text-[#616f89] dark:text-gray-400">Marketing</span>
-                                        </div>
-
-                                        <div className="flex flex-col items-center gap-2 flex-1 group">
-                                            <div className="w-full bg-[#f0f2f4] dark:bg-gray-800 rounded-t-md relative h-[200px] flex items-end overflow-hidden group-hover:bg-[#e2e4e7] dark:group-hover:bg-gray-700 transition-colors">
-                                                <div className="w-full bg-primary transition-all duration-500 bg-blue-600 rounded-t-md h-[45%]" ></div>
-                                            </div>
-                                            <span className="text-xs font-medium text-[#616f89] dark:text-gray-400">Hệ thống</span>
-                                        </div>
-
-                                        <div className="flex flex-col items-center gap-2 flex-1 group">
-                                            <div className="w-full bg-[#f0f2f4] dark:bg-gray-800 rounded-t-md relative h-[200px] flex items-end overflow-hidden group-hover:bg-[#e2e4e7] dark:group-hover:bg-gray-700 transition-colors">
-                                                <div className="w-full bg-primary/40 transition-all duration-500 bg-blue-600 rounded-t-md h-[55%]" ></div>
-                                            </div>
-                                            <span className="text-xs font-medium text-[#616f89] dark:text-gray-400">Nội bộ</span>
-                                        </div>
+                                        {(summary?.projectsByTypeInCurrentMonth ?? []).map((group) => {
+                                            const totalProjects = group.projects.length;
+                                            const avgProgress =
+                                                totalProjects > 0
+                                                    ? Math.round(
+                                                        group.projects.reduce(
+                                                            (sum: number, p: { progress: number }) =>
+                                                                sum + (p.progress ?? 0),
+                                                            0
+                                                        ) / totalProjects
+                                                    )
+                                                    : 0;
+                                            return (
+                                                <div
+                                                    key={group.type.id}
+                                                    className="flex flex-col items-center gap-2 flex-1 group"
+                                                >
+                                                    <div className="w-full bg-[#f0f2f4] dark:bg-gray-800 rounded-t-md relative h-[200px] flex items-end overflow-hidden group-hover:bg-[#e2e4e7] dark:group-hover:bg-gray-700 transition-colors">
+                                                        <div
+                                                            className="w-full bg-blue-600 transition-all duration-500 rounded-t-md"
+                                                            style={{ height: `${Math.max(avgProgress, 5)}%` }}
+                                                        />
+                                                    </div>
+                                                    <div className="text-center space-y-1">
+                                                        <span className="text-xs font-medium text-[#111318] dark:text-white block">
+                                                            {group.type.description}
+                                                        </span>
+                                                        <span className="text-[11px] text-[#616f89] dark:text-gray-400 block">
+                                                            {totalProjects} dự án • {avgProgress}%
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                        {(!summary?.projectsByTypeInCurrentMonth ||
+                                            summary.projectsByTypeInCurrentMonth.length === 0) && (
+                                                <div className="flex-1 flex items-center justify-center text-sm text-[#9ca3af]">
+                                                    Chưa có dự án nào trong tháng hiện tại.
+                                                </div>
+                                            )}
                                     </div>
                                 </div>
                                 {/* Header */}
@@ -300,7 +502,8 @@ const Dashboard: React.FC = () => {
                                     {/* Table */}
                                     <Table
                                         columns={columns}
-                                        dataSource={employees}
+                                        loading={loadingSummary}
+                                        dataSource={recentEmployees}
                                         rowKey="id"
                                         pagination={{
                                             pageSize: 5,
