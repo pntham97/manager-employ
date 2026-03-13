@@ -38,19 +38,23 @@ export interface DashboardSummaryResponse {
     }>;
 }
 export interface ProcessImmediatelyResponse {
-    processImmediately: Array<{
-        id: number;
-        name: string;
-        isDone: boolean;
-        deadline: string;
-        createdAt: string;
-    }>;
+    id: number;
+    name: string;
+    isDone: boolean;
+    deadline: string;
+    createdAt: string;
 }
 export const dashboardApi = {
     getSummary(): Promise<ApiResponse<DashboardSummaryResponse>> {
         return axiosClient.get("/dashboard/summary");
     },
-    getProcessImmediately(): Promise<ApiResponse<ProcessImmediatelyResponse>> {
+    getProcessImmediately(): Promise<ApiResponse<Array<ProcessImmediatelyResponse>>> {
         return axiosClient.get("/dashboard/process-immediately");
+    },
+    createProcessImmediately(payload: { name: string; deadline: string }): Promise<ApiResponse<void>> {
+        return axiosClient.post("/dashboard/create-process-immediately", payload);
+    },
+    updateProcessImmediately(data: ProcessImmediatelyResponse): Promise<ApiResponse<any>> {
+        return axiosClient.put(`/dashboard/path/${data.id}`, data);
     },
 };

@@ -20,7 +20,7 @@ const Projects = () => {
     // Edit modal state
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [editingProject, setEditingProject] = useState<ProjectItem | null>(null);
-
+    const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
     const handleEditClick = (e: React.MouseEvent, project: ProjectItem) => {
         e.preventDefault(); // Prevent navigating to the board if we click edit
         setEditingProject(project);
@@ -81,11 +81,11 @@ const Projects = () => {
                     completed = projectList.filter((p: any) => p.status?.statusName === 'COMPLETED' || p.status?.description?.toLowerCase().includes('hoàn thành')).length;
                     overdue = projectList.filter((p: any) => p.status?.statusName === 'OVERDUE' || p.status?.description?.toLowerCase().includes('quá hạn')).length;
                 }
-                        console.log(projectList
- , "projectList");
-                        
+                console.log(projectList
+                    , "projectList");
+
                 setStats({ total, inProgress, completed, overdue });
-               
+
             }
         } catch (err) {
             console.error("Failed to fetch projects", err);
@@ -121,7 +121,7 @@ const Projects = () => {
     };
 
     console.log(projects, "projectsprojects");
-    
+
     return (
         <div className="max-w-[1240px] h-full py-10 px-6 mx-auto flex flex-col gap-10">
             {/* Header & Breadcrumbs */}
@@ -205,12 +205,31 @@ const Projects = () => {
                     <div className="h-8 w-px bg-slate-300 dark:bg-slate-700 mx-2 hidden md:block"></div>
 
                     <div className="flex bg-white dark:bg-slate-950 p-1.5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-                        <button className="p-2 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-sm">
-                            <span className="material-symbols-outlined text-[20px] block">grid_view</span>
+
+                        <button
+                            onClick={() => setViewMode("grid")}
+                            className={`p-2 rounded-xl transition-all ${viewMode === "grid"
+                                    ? "bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-sm"
+                                    : "text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                                }`}
+                        >
+                            <span className="material-symbols-outlined text-[20px] block">
+                                grid_view
+                            </span>
                         </button>
-                        <button className="p-2 rounded-xl text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">
-                            <span className="material-symbols-outlined text-[20px] block">view_list</span>
+
+                        <button
+                            onClick={() => setViewMode("list")}
+                            className={`p-2 rounded-xl transition-all ${viewMode === "list"
+                                    ? "bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-sm"
+                                    : "text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                                }`}
+                        >
+                            <span className="material-symbols-outlined text-[20px] block">
+                                view_list
+                            </span>
                         </button>
+
                     </div>
                 </div>
             </div>

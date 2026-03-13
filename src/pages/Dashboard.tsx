@@ -1,13 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Table, Select } from "antd";
+import { Table, Select, Modal, Form, Input, DatePicker } from "antd";
 import { Search, Bell, Ellipsis, Plus, Pencil, Check } from 'lucide-react';
 import type { ColumnsType } from "antd/es/table";
 import { dashboardApi, type DashboardSummaryResponse, type ProcessImmediatelyResponse } from "../api/dashboard";
 import { employeeApi, type TypeWork } from "../api/employee.api";
 import { toast } from "react-toastify";
-
 export type EmployeeStatus = "official" | "probation" | "intern";
-
+import dayjs from "dayjs";
 const activities = [
     {
         id: 1,
@@ -62,11 +61,13 @@ const Dashboard: React.FC = () => {
     const [activeId, setActiveId] = useState(activities[0].id);
     const [loadingSummary, setLoadingSummary] = useState(false);
     const [summary, setSummary] = useState<DashboardSummaryResponse | null>(null);
-    const [processImmediately, setProcessImmediately] = useState<ProcessImmediatelyResponse | null>(null);
+    const [processImmediately, setProcessImmediately] = useState<ProcessImmediatelyResponse[]>([]);
     const [positions, setPositions] = useState<Array<{ id: number; name: string }>>([]);
     const [typeWorks, setTypeWorks] = useState<TypeWork[]>([]);
     const [editingEmployeeIds, setEditingEmployeeIds] = useState<Record<number, boolean>>({});
     const [editableRowIds, setEditableRowIds] = useState<Record<number, boolean>>({});
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [form] = Form.useForm();
     const currentUserName = useMemo(() => {
         try {
             const raw = localStorage.getItem("user");
@@ -120,21 +121,25 @@ const Dashboard: React.FC = () => {
     }, []);
     useEffect(() => {
         let mounted = true;
-        (async () => {
+
+        const fetchProcessImmediately = async () => {
             try {
                 setLoadingSummary(true);
+
                 const res = await dashboardApi.getProcessImmediately();
-                console.log(res);
-                console.log("processImmediately", res);
                 if (!mounted) return;
-                const payload = (res as any)?.data?.data ?? (res as any)?.data;
-                setProcessImmediately(payload);
+                console.log("processImmediately" + res.data)
+                setProcessImmediately(res.data ?? []);
+                console.log("processImmediately" + processImmediately)
             } catch (e) {
                 console.error("Failed to load dashboard process immediately", e);
             } finally {
                 if (mounted) setLoadingSummary(false);
             }
-        })();
+        };
+
+        fetchProcessImmediately();
+
         return () => {
             mounted = false;
         };
@@ -289,7 +294,7 @@ const Dashboard: React.FC = () => {
                     onClick={() => setEditableRowIds(prev => ({ ...prev, [record.id]: !prev[record.id] }))}
                     className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors
                         ${editableRowIds[record.id]
-                            ? "bg-primary text-white hover:bg-primary/90"
+                            ? "bg-primary text-red hover:bg-primary/90"
                             : "bg-primary/10 text-primary hover:bg-primary/15"
                         }`}
                 >
@@ -321,9 +326,64 @@ const Dashboard: React.FC = () => {
             },
         },
     ];
+    const openModal = () => {
+        setIsModalOpen(true);
+    };
 
+    const handleCancel = () => {
+        setIsModalOpen(false);
+        form.resetFields();
+    };
 
+    const handleSubmitProcessImmediately = async () => {
+        try {
+            const values = await form.validateFields();
 
+            const payload = {
+                name: values.name,
+                deadline: values.deadline.format("YYYY-MM-DD")
+            };
+
+            console.log("submit processImmediately", payload);
+
+            // gọi API tạo task
+            await dashboardApi.createProcessImmediately(payload);
+
+            toast.success("Đã thêm công việc");
+
+            setIsModalOpen(false);
+            form.resetFields();
+
+            // reload list
+            const res = await dashboardApi.getProcessImmediately();
+            const payloadData = (res as any)?.data?.data ?? (res as any)?.data;
+            setProcessImmediately(payloadData);
+
+        } catch (err) {
+            console.error(err);
+        }
+    };
+    const handleToggleProcessImmediately = async (checked: boolean, data: ProcessImmediatelyResponse) => {
+        try {
+            const updatedData = {
+                ...data,
+                isDone: checked,
+            };
+
+            await dashboardApi.updateProcessImmediately(updatedData);
+
+            setProcessImmediately(prev =>
+                prev.map(item =>
+                    item.id === data.id ? { ...item, isDone: checked } : item
+                )
+            );
+
+            toast.success("Đã cập nhật trạng thái");
+        } catch (err) {
+            console.error(err);
+            toast.error("Cập nhật thất bại");
+        }
+    };
     return (
         // <section className="bg-white dark:bg-gray-900 shadow-xl p-6">
 
@@ -520,32 +580,34 @@ const Dashboard: React.FC = () => {
                             <div className="rounded-xl mb-[20px] bg-white dark:bg-[#1A202C] border border-[#f0f2f4] dark:border-gray-800 p-6 shadow-sm">
                                 <div className="flex items-center justify-between mb-4">
                                     <h3 className="text-[#111318] dark:text-white text-lg font-bold">Cần làm ngay</h3>
-                                    <button className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700">
-                                        <span className="material-symbols-outlined text-primary">  <Plus /></span>
+                                    <button
+                                        onClick={openModal}
+                                        className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
+                                    >                                        <span className="material-symbols-outlined text-primary">  <Plus /></span>
                                     </button>
                                 </div>
                                 <div className="flex flex-col gap-3">
-                                    <label className="flex items-start gap-3 p-3 rounded-lg border border-[#f0f2f4] dark:border-gray-700 hover:bg-[#f9fafb] dark:hover:bg-gray-800/50 transition-colors cursor-pointer group">
-                                        <input className="mt-1 w-4 h-4 text-primary rounded border-gray-300 focus:ring-primary" type="checkbox" />
-                                        <div className="flex flex-col">
-                                            <span className="text-sm font-medium text-[#111318] dark:text-white group-hover:text-primary transition-colors">Duyệt bảng lương T10</span>
-                                            <span className="text-xs text-[#616f89] dark:text-gray-400">Hạn chót: Hôm nay</span>
-                                        </div>
-                                    </label>
-                                    <label className="flex items-start gap-3 p-3 rounded-lg border border-[#f0f2f4] dark:border-gray-700 hover:bg-[#f9fafb] dark:hover:bg-gray-800/50 transition-colors cursor-pointer group">
-                                        <input className="mt-1 w-4 h-4 text-primary rounded border-gray-300 focus:ring-primary" type="checkbox" />
-                                        <div className="flex flex-col">
-                                            <span className="text-sm font-medium text-[#111318] dark:text-white group-hover:text-primary transition-colors">Phỏng vấn Senior Dev</span>
-                                            <span className="text-xs text-[#616f89] dark:text-gray-400">14:00 PM - Phòng họp 2</span>
-                                        </div>
-                                    </label>
-                                    <label className="flex items-start gap-3 p-3 rounded-lg border border-[#f0f2f4] dark:border-gray-700 hover:bg-[#f9fafb] dark:hover:bg-gray-800/50 transition-colors cursor-pointer group">
-                                        <input className="mt-1 w-4 h-4 text-primary rounded border-gray-300 focus:ring-primary" type="checkbox" />
-                                        <div className="flex flex-col">
-                                            <span className="text-sm font-medium text-[#111318] dark:text-white group-hover:text-primary transition-colors">Ký hợp đồng nhân viên mới</span>
-                                            <span className="text-xs text-[#616f89] dark:text-gray-400">3 hồ sơ chờ ký</span>
-                                        </div>
-                                    </label>
+                                    {processImmediately.map((item: any) => {
+                                        return (
+                                            <label className="flex items-start gap-3 p-3 rounded-lg border border-[#f0f2f4] dark:border-gray-700 hover:bg-[#f9fafb] dark:hover:bg-gray-800/50 transition-colors cursor-pointer group"
+                                                key={item.id}>
+                                                <input
+                                                    type="checkbox"
+                                                    className="mt-1 w-4 h-4 text-primary rounded border-gray-300 focus:ring-primary"
+                                                    checked={item.isDone}
+                                                    onChange={(e) =>
+                                                        handleToggleProcessImmediately(e.target.checked, item)
+                                                    }
+                                                />
+                                                <div className="flex flex-col">
+                                                    <span className="text-sm font-medium text-[#111318] dark:text-white group-hover:text-primary transition-colors">{item?.name}</span>
+                                                    <span className="text-xs text-[#616f89] dark:text-gray-400">                {dayjs(item.deadline).format("DD/MM/YYYY")}
+                                                    </span>
+                                                </div>
+                                            </label>
+                                        );
+                                    })}
+
                                 </div>
                             </div>
                             <div className="rounded-xl bg-white dark:bg-[#1A202C] border border-[#f0f2f4] dark:border-gray-800 p-6 shadow-sm flex-1">
@@ -597,6 +659,35 @@ const Dashboard: React.FC = () => {
 
                 </main>
             </div>
+            <Modal
+                title="Thêm công việc cần làm ngay"
+                open={isModalOpen}
+                onCancel={handleCancel}
+                onOk={handleSubmitProcessImmediately}
+                okText="Lưu"
+                cancelText="Huỷ"
+            >
+                <Form form={form} layout="vertical">
+                    <Form.Item
+                        label="Nội dung"
+                        name="name"
+                        rules={[{ required: true, message: "Vui lòng nhập nội dung" }]}
+                    >
+                        <Input placeholder="Nhập nội dung công việc..." />
+                    </Form.Item>
+
+                    <Form.Item
+                        label="Deadline"
+                        name="deadline"
+                        rules={[{ required: true, message: "Vui lòng chọn deadline" }]}
+                    >
+                        <DatePicker
+                            style={{ width: "100%" }}
+                            format="DD/MM/YYYY"
+                        />
+                    </Form.Item>
+                </Form>
+            </Modal>
         </div>
         // </section>
 
