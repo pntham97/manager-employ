@@ -234,106 +234,197 @@ const Projects = () => {
                 </div>
             </div>
 
-            {/* Project Grid */}
+            {/* Project Grid / List */}
             {loading ? (
                 <div className="flex-1 flex flex-col items-center justify-center py-20 gap-4">
                     <div className="w-12 h-12 border-4 border-slate-200 border-t-primary rounded-full animate-spin"></div>
                     <p className="text-slate-400 font-bold animate-pulse">Đang tải danh sách dự án...</p>
                 </div>
             ) : projects.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                <div className={viewMode === "grid"
+                    ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"
+                    : "flex flex-col gap-4"
+                }>
                     {projects.map((project) => (
                         <Link
                             key={project.id}
                             to={`/projects/${project.id}/board`}
-                            className="group flex flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2rem] p-8 hover:border-primary/50 hover:shadow-2xl hover:shadow-primary/5 transition-all duration-300 relative overflow-hidden"
+                            className={`group flex bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-primary/50 hover:shadow-2xl hover:shadow-primary/5 transition-all duration-300 relative overflow-hidden
+                                ${viewMode === "grid"
+                                    ? "flex-col rounded-[2rem] p-8"
+                                    : "flex-col sm:flex-row sm:items-center rounded-2xl p-6 gap-4 sm:gap-6"
+                                }`}
                         >
                             {/* Decorative line color based on status */}
                             <div className={`absolute top-0 left-0 right-0 h-1.5 ${getProgressBarColor(project.status.description)} opacity-40`} />
 
-                            <div className="flex justify-between items-start mb-6">
-                                <div className="flex flex-col gap-1.5">
-                                    <span className="text-[10px] font-black text-primary uppercase tracking-[0.2em]">{project.type.description}</span>
-                                    <h3 className="text-xl font-black text-slate-900 dark:text-white group-hover:text-primary transition-colors line-clamp-1">{project.projectName}</h3>
-                                </div>
-                                <div className="flex flex-col items-end gap-2">
-                                    <div className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider ${getStatusColor(project.status.description)}`}>
-                                        {project.status.description}
+                            {viewMode === "grid" ? (
+                                <>
+                                    <div className="flex justify-between items-start mb-6">
+                                        <div className="flex flex-col gap-1.5">
+                                            <span className="text-[10px] font-black text-primary uppercase tracking-[0.2em]">{project.type.description}</span>
+                                            <h3 className="text-xl font-black text-slate-900 dark:text-white group-hover:text-primary transition-colors line-clamp-1">{project.projectName}</h3>
+                                        </div>
+                                        <div className="flex flex-col items-end gap-2">
+                                            <div className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider ${getStatusColor(project.status.description)}`}>
+                                                {project.status.description}
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
-                            </div>
 
-                            <p className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed mb-6 line-clamp-2 italic">
-                                {project.description || "Không có mô tả chi tiết cho dự án này."}
-                            </p>
+                                    <p className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed mb-6 line-clamp-2 italic">
+                                        {project.description || "Không có mô tả chi tiết cho dự án này."}
+                                    </p>
 
-                            <div className="mb-6">
-                                <div className="flex justify-between text-[11px] font-bold mb-2">
-                                    <span className="text-slate-400 uppercase tracking-wider">Tiến trình đạt được</span>
-                                    <span className="text-slate-900 dark:text-white">{Math.round(project.progress)}%</span>
-                                </div>
-                                <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2.5 overflow-hidden">
-                                    <div
-                                        className={`h-full rounded-full transition-all duration-1000 ease-out ${getProgressBarColor(project.status.description)}`}
-                                        style={{ width: `${project.progress}%` }}
-                                    />
-                                </div>
-
-                                <div className="flex items-center gap-3 mt-5">
-                                    <button
-                                        onClick={(e) => handleEditClick(e, project)}
-                                        className="flex-1 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center gap-2 text-slate-600 dark:text-slate-300 hover:text-primary hover:bg-primary/10 transition-colors pointer-events-auto text-xs font-bold"
-                                        title="Chỉnh sửa dự án"
-                                    >
-                                        <span className="material-symbols-outlined text-[16px]">edit</span>
-                                        Cập nhật
-                                    </button>
-                                    {project.boardTaskId === null ? (
-                                        <div className="flex-1 h-9 flex items-center justify-center gap-1.5 bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800 rounded-xl text-xs font-bold tracking-tight px-2 pointer-events-none">
-                                            <span className="material-symbols-outlined text-[16px]">warning</span>
-                                            Chưa phân task
+                                    <div className="mb-6">
+                                        <div className="flex justify-between text-[11px] font-bold mb-2">
+                                            <span className="text-slate-400 uppercase tracking-wider">Tiến trình đạt được</span>
+                                            <span className="text-slate-900 dark:text-white">{Math.round(project.progress)}%</span>
                                         </div>
-                                    ) : (
-                                        <div className="flex-1 h-9 flex items-center justify-center gap-1.5 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 border border-green-200 dark:border-green-800 rounded-xl text-xs font-bold tracking-tight px-2 pointer-events-none">
-                                            <span className="material-symbols-outlined text-[16px]">check_circle</span>
-                                            Đã phân task
+                                        <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2.5 overflow-hidden">
+                                            <div
+                                                className={`h-full rounded-full transition-all duration-1000 ease-out ${getProgressBarColor(project.status.description)}`}
+                                                style={{ width: `${project.progress}%` }}
+                                            />
                                         </div>
-                                    )}
-                                </div>
-                            </div>
 
-                            <div className="mt-auto flex items-center justify-between pt-6 border-t border-slate-100 dark:border-slate-800">
-                                <div className="flex -space-x-3">
-                                    {project.members && project.members.length > 0 ? (
-                                        <>
-                                            {project.members.slice(0, 3).map((member, idx) => (
-                                                <div
-                                                    key={idx}
-                                                    title={member.name}
-                                                    className="w-10 h-10 rounded-full border-2 border-white dark:border-slate-900 bg-slate-200 flex items-center justify-center overflow-hidden"
-                                                >
-                                                    {member.avatarUrl ? (
-                                                        <img src={member.avatarUrl} alt={member.name} className="w-full h-full object-cover" />
-                                                    ) : (
-                                                        <span className="material-symbols-outlined text-slate-400 text-xl">person</span>
-                                                    )}
+                                        <div className="flex items-center gap-3 mt-5">
+                                            <button
+                                                onClick={(e) => handleEditClick(e, project)}
+                                                className="flex-1 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center gap-2 text-slate-600 dark:text-slate-300 hover:text-primary hover:bg-primary/10 transition-colors pointer-events-auto text-xs font-bold"
+                                                title="Chỉnh sửa dự án"
+                                            >
+                                                <span className="material-symbols-outlined text-[16px]">edit</span>
+                                                Cập nhật
+                                            </button>
+                                            {project.boardTaskId === null ? (
+                                                <div className="flex-1 h-9 flex items-center justify-center gap-1.5 bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800 rounded-xl text-xs font-bold tracking-tight px-2 pointer-events-none">
+                                                    <span className="material-symbols-outlined text-[16px]">warning</span>
+                                                    Chưa phân task
                                                 </div>
-                                            ))}
-                                            {project.members.length > 3 && (
-                                                <div className="w-10 h-10 rounded-full border-2 border-white dark:border-slate-900 bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-[11px] font-bold text-slate-600 dark:text-slate-400">
-                                                    +{project.members.length - 3}
+                                            ) : (
+                                                <div className="flex-1 h-9 flex items-center justify-center gap-1.5 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 border border-green-200 dark:border-green-800 rounded-xl text-xs font-bold tracking-tight px-2 pointer-events-none">
+                                                    <span className="material-symbols-outlined text-[16px]">check_circle</span>
+                                                    Đã phân task
                                                 </div>
                                             )}
-                                        </>
-                                    ) : (
-                                        <div className="text-[10px] font-bold text-slate-400 uppercase italic">Chưa phân công</div>
-                                    )}
-                                </div>
-                                <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 text-[11px] font-black tracking-tight">
-                                    <span className="material-symbols-outlined text-[16px]">event</span>
-                                    {new Date(project.deadline).toLocaleDateString('vi-VN', { day: '2-digit', month: 'short' })}
-                                </div>
-                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-auto flex items-center justify-between pt-6 border-t border-slate-100 dark:border-slate-800">
+                                        <div className="flex -space-x-3">
+                                            {project.members && project.members.length > 0 ? (
+                                                <>
+                                                    {project.members.slice(0, 3).map((member, idx) => (
+                                                        <div
+                                                            key={idx}
+                                                            title={member.name}
+                                                            className="w-10 h-10 rounded-full border-2 border-white dark:border-slate-900 bg-slate-200 flex items-center justify-center overflow-hidden"
+                                                        >
+                                                            {member.avatarUrl ? (
+                                                                <img src={member.avatarUrl} alt={member.name} className="w-full h-full object-cover" />
+                                                            ) : (
+                                                                <span className="material-symbols-outlined text-slate-400 text-xl">person</span>
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                    {project.members.length > 3 && (
+                                                        <div className="w-10 h-10 rounded-full border-2 border-white dark:border-slate-900 bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-[11px] font-bold text-slate-600 dark:text-slate-400">
+                                                            +{project.members.length - 3}
+                                                        </div>
+                                                    )}
+                                                </>
+                                            ) : (
+                                                <div className="text-[10px] font-bold text-slate-400 uppercase italic">Chưa phân công</div>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 text-[11px] font-black tracking-tight">
+                                            <span className="material-symbols-outlined text-[16px]">event</span>
+                                            {new Date(project.deadline).toLocaleDateString('vi-VN', { day: '2-digit', month: 'short' })}
+                                        </div>
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    <div className="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-center gap-4">
+                                        <div className="flex flex-col gap-1 min-w-0">
+                                            <span className="text-[10px] font-black text-primary uppercase tracking-[0.2em]">{project.type.description}</span>
+                                            <h3 className="text-lg font-black text-slate-900 dark:text-white group-hover:text-primary transition-colors truncate">{project.projectName}</h3>
+                                            <p className="text-slate-500 dark:text-slate-400 text-sm truncate italic hidden sm:block">
+                                                {project.description || "Không có mô tả"}
+                                            </p>
+                                        </div>
+                                        <div className={`shrink-0 px-3 py-1.5 rounded-full text-[10px] font-black uppercase ${getStatusColor(project.status.description)}`}>
+                                            {project.status.description}
+                                        </div>
+                                    </div>
+
+                                    <div className="w-full sm:w-48 lg:w-56 shrink-0">
+                                        <div className="flex justify-between text-[11px] font-bold mb-1">
+                                            <span className="text-slate-400">Tiến trình</span>
+                                            <span className="text-slate-900 dark:text-white">{Math.round(project.progress)}%</span>
+                                        </div>
+                                        <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden">
+                                            <div
+                                                className={`h-full rounded-full transition-all ${getProgressBarColor(project.status.description)}`}
+                                                style={{ width: `${project.progress}%` }}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="flex flex-wrap items-center gap-3 sm:gap-4 shrink-0">
+                                        <div className="flex -space-x-2">
+                                            {project.members && project.members.length > 0 ? (
+                                                <>
+                                                    {project.members.slice(0, 3).map((member, idx) => (
+                                                        <div
+                                                            key={idx}
+                                                            title={member.name}
+                                                            className="w-8 h-8 rounded-full border-2 border-white dark:border-slate-900 bg-slate-200 flex items-center justify-center overflow-hidden"
+                                                        >
+                                                            {member.avatarUrl ? (
+                                                                <img src={member.avatarUrl} alt={member.name} className="w-full h-full object-cover" />
+                                                            ) : (
+                                                                <span className="material-symbols-outlined text-slate-400 text-sm">person</span>
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                    {project.members.length > 3 && (
+                                                        <div className="w-8 h-8 rounded-full border-2 border-white dark:border-slate-900 bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-[10px] font-bold text-slate-600 dark:text-slate-400">
+                                                            +{project.members.length - 3}
+                                                        </div>
+                                                    )}
+                                                </>
+                                            ) : (
+                                                <span className="text-[10px] font-bold text-slate-400 italic">Chưa phân công</span>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 text-[11px] font-bold">
+                                            <span className="material-symbols-outlined text-[16px]">event</span>
+                                            {new Date(project.deadline).toLocaleDateString('vi-VN', { day: '2-digit', month: 'short' })}
+                                        </div>
+                                        <button
+                                            onClick={(e) => handleEditClick(e, project)}
+                                            className="h-9 px-4 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center gap-2 text-slate-600 dark:text-slate-300 hover:text-primary hover:bg-primary/10 transition-colors pointer-events-auto text-xs font-bold"
+                                            title="Chỉnh sửa dự án"
+                                        >
+                                            <span className="material-symbols-outlined text-[16px]">edit</span>
+                                            Cập nhật
+                                        </button>
+                                        {project.boardTaskId === null ? (
+                                            <div className="h-9 flex items-center justify-center gap-1.5 bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800 rounded-xl text-xs font-bold px-3 pointer-events-none">
+                                                <span className="material-symbols-outlined text-[16px]">warning</span>
+                                                Chưa phân task
+                                            </div>
+                                        ) : (
+                                            <div className="h-9 flex items-center justify-center gap-1.5 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 border border-green-200 dark:border-green-800 rounded-xl text-xs font-bold px-3 pointer-events-none">
+                                                <span className="material-symbols-outlined text-[16px]">check_circle</span>
+                                                Đã phân task
+                                            </div>
+                                        )}
+                                    </div>
+                                </>
+                            )}
                         </Link>
                     ))}
                 </div>
